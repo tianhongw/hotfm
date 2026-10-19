@@ -130,7 +130,7 @@
 .searchArea {
   position: relative;
   z-index: 30;
-  margin-bottom: 28px;
+  margin-bottom: 20px;
 }
 .listTitle {
   display: flex;
@@ -294,7 +294,7 @@
     border-radius: 14px;
   }
   .searchArea {
-    margin-bottom: 22px;
+    margin-bottom: 16px;
   }
   .listTitle {
     padding: 14px 5px 8px;

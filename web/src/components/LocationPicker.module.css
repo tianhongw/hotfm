@@ -1,42 +1,52 @@
 .wrap {
   position: relative;
+  flex: none;
 }
 
 .button {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  min-height: 54px;
+  gap: 8px;
+  height: 40px;
   max-width: 100%;
-  padding: 0 12px;
+  padding: 0 10px 0 12px;
   border-radius: 10px;
-  color: var(--text);
+  color: var(--text-2);
   font-size: 13px;
+  font-weight: 550;
   text-align: left;
   white-space: nowrap;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
-.button:hover {
+.button:hover,
+.button[aria-expanded='true'] {
   background: var(--panel-2);
+  color: var(--text);
+}
+.button > svg {
+  flex: none;
+  color: var(--muted);
 }
 .button > svg:first-child {
   color: var(--amber);
-  flex: none;
-}
-.buttonText {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.triggerLabel {
-  font-weight: 600;
 }
 .selection {
-  font-size: 11px;
-  color: var(--muted);
-  max-width: 180px;
+  min-width: 0;
+  max-width: 240px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+@media (max-width: 767px) {
+  .button {
+    gap: 6px;
+    padding: 0 8px 0 10px;
+  }
+  .selection {
+    max-width: 110px;
+  }
 }
 
 .panel {
@@ -263,15 +273,6 @@
   min-height: 44px;
 }
 @media (max-width: 767px) {
-  .button {
-    padding: 0 4px;
-    gap: 5px;
-    font-size: 12px;
-    min-height: 52px;
-  }
-  .selection {
-    display: none;
-  }
   .panel .tab {
     min-height: 44px;
   }

@@ -43,7 +43,8 @@ export function useKeyboard() {
         '?': () => ui.setShortcutsOpen(true),
         t: () => ui.setDialOpen(!ui.dialOpen),
         l: () => {
-          ui.setTab('all')
+          // setTab clears the query, so only leave Favorites/Recent; a search on Stations stays.
+          if (ui.tab !== 'all') ui.setTab('all')
           ui.setLocationOpen(true)
         },
       }

@@ -40,7 +40,7 @@ interface UIState {
 
   setCountry: (c: CountryCode) => void
   setRegion: (r: string) => void
-  /** Country + region in one step (the location picker and search use this); remembered in recentRegions. */
+  /** Country + region in one step from the location picker; keeps the query, remembered in recentRegions. */
   setLocation: (c: CountryCode, r: string) => void
   setSearchText: (text: string) => void
   commitSearch: () => void
@@ -80,12 +80,11 @@ export const useUI = create<UIState>()(
 
       setCountry: (country) => set((s) => (s.country === country ? s : { country, region: '' })),
       setRegion: (region) => set({ region, searchText: '', searchTerm: '', searchScope: 'current' }),
+      // The query survives so results re-run in the new place; a widened search narrows back to it.
       setLocation: (country, region) =>
         set((s) => ({
           country,
           region,
-          searchText: '',
-          searchTerm: '',
           searchScope: 'current',
           tab: 'all',
           recentRegions: region

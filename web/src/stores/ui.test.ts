@@ -58,10 +58,12 @@ describe('search and filter transitions', () => {
     useUI.getState().setSearchText('音乐')
     expect(useUI.getState().searchScope).toBe('current')
   })
-  it('changing region or library tab removes the active search', () => {
-    useUI.setState({ searchText: 'old', searchTerm: 'old', searchScope: 'all' })
+  it('picking a location re-runs the active search there', () => {
+    useUI.setState({ searchText: 'jazz', searchTerm: 'jazz', searchScope: 'all' })
     useUI.getState().setLocation('US', 'texas')
-    expect(useUI.getState()).toMatchObject({ country: 'US', region: 'texas', searchText: '', searchTerm: '', searchScope: 'current' })
+    expect(useUI.getState()).toMatchObject({ country: 'US', region: 'texas', searchText: 'jazz', searchTerm: 'jazz', searchScope: 'current' })
+  })
+  it('changing library tab removes the active search', () => {
     useUI.getState().setSearchText('new')
     useUI.getState().commitSearch()
     useUI.getState().setSearchScope('all')

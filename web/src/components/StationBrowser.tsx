@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useCountries, useRegions, useStationList } from '../api/hooks'
+import { useRegions, useStationList } from '../api/hooks'
 import { useT } from '../i18n'
 import { stationQuery } from '../lib/stationQuery'
 import { useLibrary } from '../stores/library'
@@ -16,14 +16,10 @@ export function StationBrowser() {
   const { country, region, sort, tab, searchText, searchTerm, searchScope } = ui
   const { favorites, recent, removeFavorite, removeRecent, theme } = useLibrary()
   const regions = useRegions(country)
-  const countries = useCountries()
   const label = useRegionLabel()
   const place = regions.data?.find((r) => r.key === region)
   const location = [t(`country.${country}`), region ? (place ? label(place, country) : region) : t('region.all')].join(' · ')
   const searchLocation = region ? location : t(`country.${country}`)
-  const searchCount = searchScope === 'all'
-    ? countries.data?.reduce((sum, c) => sum + c.count, 0)
-    : region ? place?.count : countries.data?.find((c) => c.code === country)?.count
   const searching = !!searchText.trim()
   const waiting = searchText.trim() !== searchTerm
   const query = useMemo(
@@ -49,7 +45,7 @@ export function StationBrowser() {
         </div>
       )}
       <div className={s.searchArea}>
-        <StationSearch location={searchScope === 'all' ? t('search.allRegions') : location} stationCount={searchCount} />
+        <StationSearch />
       </div>
       <div className={s.navigation}>
         <div className={s.tabs} role="tablist" aria-label={t('home.radio')}>

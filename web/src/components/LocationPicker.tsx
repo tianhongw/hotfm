@@ -38,9 +38,13 @@ export function LocationPicker() {
   const region = useUI((u) => u.region)
   const open = useUI((u) => u.locationOpen)
   const setOpen = useUI((u) => u.setLocationOpen)
+  // A widened search temporarily searches everywhere; the trigger says so.
+  const everywhere = useUI((u) => u.searchScope === 'all' && !!u.searchText.trim())
   const mobile = useIsMobile()
   const regions = useRegions(country)
   const current = regions.data?.find((r) => r.key === region)
+  const place = current ? label(current, country) : t(mobile ? 'location.all' : 'region.all')
+  const selection = everywhere ? t('search.allRegions') : mobile ? `${country} · ${place}` : `${t(`country.${country}`)} · ${place}`
   const trigger = useRef<HTMLButtonElement>(null)
   const close = useCallback(() => {
     setOpen(false)
@@ -58,12 +62,9 @@ export function LocationPicker() {
         aria-label={t('location.button')}
         title={`${t('location.button')} (L)`}
       >
-        <IconPin size={15} />
-        <span className={s.buttonText}>
-          <span className={s.triggerLabel}>{t(mobile ? 'location.short' : 'location.button')}</span>
-          <span className={s.selection}>
-            {t(`country.${country}`)} · {current ? label(current, country) : t('region.all')}
-          </span>
+        <IconPin size={16} />
+        <span id="station-search-scope" className={s.selection}>
+          {selection}
         </span>
         <IconChevron size={14} />
       </button>
