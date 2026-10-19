@@ -1,0 +1,30 @@
+.logo {
+  display: inline-flex;
+  flex: none;
+  align-items: baseline;
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 30px;
+  font-weight: 750;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.o {
+  width: 0.833em;
+  height: 1em;
+  margin: 0 0.07em 0 0.04em;
+  color: var(--amber);
+}
+
+/* Amber is reserved for things that glow on real hardware. */
+:root[data-theme='hifi'] .o {
+  filter: drop-shadow(0 0 4px rgba(255, 181, 71, 0.5));
+}
+
+@media (max-width: 767px) {
+  .logo {
+    font-size: 26px;
+  }
+}

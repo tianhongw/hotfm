@@ -2,7 +2,8 @@ import { useLang, useT } from '../i18n'
 import { useLibrary } from '../stores/library'
 import { useUI } from '../stores/ui'
 import { AppearancePicker } from './AppearancePicker'
-import { IconKeyboard, IconWave } from './Icons'
+import { BrandLogo } from './BrandLogo'
+import { IconKeyboard } from './Icons'
 import s from './Header.module.css'
 
 export function Header() {
@@ -13,14 +14,7 @@ export function Header() {
   return (
     <header className={s.header}>
       <div className={s.top}>
-        <div className={s.brand}>
-          <span className={s.mark}>
-            <IconWave size={23} />
-          </span>
-          <span className={s.name}>
-            HotFM<span className={s.brandDot}>.</span>
-          </span>
-        </div>
+        <BrandLogo />
         <div className={s.tools}>
           <AppearancePicker />
           <button className={`${s.tool} ${s.language}`} onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')} aria-label="Language">

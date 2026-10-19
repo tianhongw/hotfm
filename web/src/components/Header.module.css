@@ -9,29 +9,6 @@
   align-items: center;
   gap: 16px;
 }
-.brand {
-  display: flex;
-  gap: 11px;
-  align-items: center;
-  flex: none;
-}
-.mark {
-  display: grid;
-  place-items: center;
-  width: 38px;
-  height: 38px;
-  background: var(--amber);
-  color: var(--panel);
-  border-radius: 11px;
-}
-.name {
-  font-size: 25px;
-  letter-spacing: -1px;
-  font-weight: 750;
-}
-.brandDot {
-  color: var(--amber);
-}
 .tools {
   display: flex;
   align-items: center;

@@ -134,16 +134,3 @@ export const IconTag = ({ size, ...p }: P) => (
     <circle cx="8.6" cy="8.6" r="1.2" fill="currentColor" stroke="none" />
   </svg>
 )
-
-/** The HotFM mark: a red needle crossing a dial line. Colours come from theme tokens (SVG attributes can't read var()). */
-export const Mark = ({ size = 22 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden>
-    <rect width="32" height="32" rx="8" style={{ fill: 'var(--panel-2)' }} />
-    <rect x="0.5" y="0.5" width="31" height="31" rx="7.5" fill="none" style={{ stroke: 'var(--line-2)' }} />
-    <g strokeWidth="1.2" style={{ stroke: 'var(--dim)' }}>
-      <path d="M6 21v-2M9 21v-1M12 21v-2M15 21v-1M21 21v-1M24 21v-2M27 21v-1" />
-    </g>
-    <rect x="17" y="7" width="2.2" height="18" rx="1.1" style={{ fill: 'var(--red)' }} />
-    <circle cx="9" cy="12" r="2.2" style={{ fill: 'var(--amber)' }} />
-  </svg>
-)
