@@ -24,7 +24,7 @@ type Config struct {
 
 func Load() (*Config, error) {
 	c := &Config{
-		Addr:            env("HOTFM_ADDR", ":8080"),
+		Addr:            env("HOTFM_ADDR", ":18347"),
 		DataDir:         env("HOTFM_DATA_DIR", "./data"),
 		UserAgent:       env("HOTFM_USER_AGENT", "HotFM/0.1 (+https://github.com/hotfm)"),
 		StreamMode:      env("HOTFM_STREAM_MODE", "auto"),

@@ -2,12 +2,13 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-const api = process.env.HOTFM_API ?? 'http://localhost:8080'
+const api = process.env.HOTFM_API ?? 'http://localhost:18347'
 
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 5173,
+    port: 18348,
+    strictPort: true,
     proxy: {
       '/api': { target: api, changeOrigin: false },
       '/healthz': { target: api },

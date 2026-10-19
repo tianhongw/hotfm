@@ -1,5 +1,5 @@
 # HotFM — Go API + TypeScript web app.
-#   make dev      run API (:8080) and Vite dev server (:5173) together
+#   make dev      run API (:18347) and Vite dev server (:18348) together
 #   make build    build web, embed it, produce ./bin/hotfm
 #   make test     Go + web unit tests
 #   make gen      regenerate TS API types from server/api/openapi.yaml
@@ -13,16 +13,13 @@ PNPM ?= pnpm
 .PHONY: dev dev-api dev-web build web server test test-go test-web gen lint clean
 
 dev:
-	@trap 'kill 0' EXIT; \
-	$(MAKE) dev-api & \
-	$(MAKE) dev-web & \
-	wait
+	@node scripts/dev.mjs
 
 dev-api:
-	cd server && HOTFM_DEV_CORS=1 HOTFM_DATA_DIR=../data go run ./cmd/hotfm
+	@node scripts/dev.mjs api
 
 dev-web:
-	cd web && $(PNPM) dev
+	@node scripts/dev.mjs web
 
 web:
 	cd web && $(PNPM) install --frozen-lockfile && $(PNPM) build

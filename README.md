@@ -17,25 +17,29 @@ hotfm/
 
 ```bash
 cd web && pnpm install && cd ..
-make dev            # API :8080 + Vite :5173，浏览器打开 http://localhost:5173
+make dev            # API :18347 + Vite :18348，浏览器打开 http://localhost:18348
 ```
+
+按 Ctrl+C 会关闭前后端并释放端口；也可用 `make dev-api` / `make dev-web` 单独启动。
+端口占用或服务启动失败时会报错并结束整个开发任务，前端不会自动切换端口。
 
 首次启动会从 [Radio Browser](https://www.radio-browser.info) 同步两国电台（数千条，视网络约 1–3 分钟），
 之后健康检测器开始逐台探测。
 
 ```bash
 make build          # 构建前端并内嵌，产出 ./bin/hotfm
-./bin/hotfm         # 访问 http://localhost:8080
+./bin/hotfm         # 访问 http://localhost:18347
 make test           # Go + 前端单元测试
 make gen            # 修改 openapi.yaml 后重新生成 web/src/api/schema.d.ts
-docker build -t hotfm . && docker run -p 8080:8080 -v hotfm-data:/data hotfm
+docker build -t hotfm . && docker run -p 18347:18347 -v hotfm-data:/data hotfm
 ```
 
 ## 配置（环境变量）
 
 | 变量 | 默认 | 说明 |
 |---|---|---|
-| `HOTFM_ADDR` | `:8080` | 监听地址 |
+| `HOTFM_ADDR` | `:18347` | 监听地址 |
+| `HOTFM_API` | `http://localhost:18347` | Vite 开发代理的 API 地址；开发时修改 `HOTFM_ADDR` 需同步设置 |
 | `HOTFM_DATA_DIR` | `./data` | SQLite 数据库与台标缓存目录 |
 | `HOTFM_SYNC_INTERVAL` | `24h` | 目录同步间隔（按“上次成功同步时间”判断，重启不会重复/漏同步） |
 | `HOTFM_STREAM_MODE` | `auto` | `auto`：普通 HTTPS 音频直连省带宽，HTTP 音频和 HLS 仍走代理；`proxy`：全部流经服务端（解决 https 混合内容、CORS、可取 Now Playing） |

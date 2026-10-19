@@ -19,7 +19,7 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /out/hotfm ./cmd/hotfm
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=server /out/hotfm /hotfm
-ENV HOTFM_ADDR=:8080 HOTFM_DATA_DIR=/data
+ENV HOTFM_ADDR=:18347 HOTFM_DATA_DIR=/data
 VOLUME /data
-EXPOSE 8080
+EXPOSE 18347
 ENTRYPOINT ["/hotfm"]
