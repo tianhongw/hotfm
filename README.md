@@ -38,7 +38,7 @@ docker build -t hotfm . && docker run -p 8080:8080 -v hotfm-data:/data hotfm
 | `HOTFM_ADDR` | `:8080` | 监听地址 |
 | `HOTFM_DATA_DIR` | `./data` | SQLite 数据库与台标缓存目录 |
 | `HOTFM_SYNC_INTERVAL` | `24h` | 目录同步间隔（按“上次成功同步时间”判断，重启不会重复/漏同步） |
-| `HOTFM_STREAM_MODE` | `proxy` | `proxy`：全部流经服务端（解决 https 混合内容、CORS、可取 Now Playing）；`auto`：https 音频直连省带宽（HLS 始终代理） |
+| `HOTFM_STREAM_MODE` | `auto` | `auto`：普通 HTTPS 音频直连省带宽，HTTP 音频和 HLS 仍走代理；`proxy`：全部流经服务端（解决 https 混合内容、CORS、可取 Now Playing） |
 | `HOTFM_MAX_STREAMS_PER_IP` | `4` | 每个客户端 IP 并发流上限 |
 | `HOTFM_SECRET` | 随机 | HLS 代理 URL 的 HMAC 密钥；多实例部署时需固定 |
 | `HOTFM_TRUST_PROXY` | 关 | `1` 时信任 `X-Forwarded-For`（部署在反向代理后） |

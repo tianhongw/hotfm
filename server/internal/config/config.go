@@ -27,7 +27,7 @@ func Load() (*Config, error) {
 		Addr:            env("HOTFM_ADDR", ":8080"),
 		DataDir:         env("HOTFM_DATA_DIR", "./data"),
 		UserAgent:       env("HOTFM_USER_AGENT", "HotFM/0.1 (+https://github.com/hotfm)"),
-		StreamMode:      env("HOTFM_STREAM_MODE", "proxy"),
+		StreamMode:      env("HOTFM_STREAM_MODE", "auto"),
 		RadioBrowserURL: os.Getenv("HOTFM_RADIOBROWSER_URL"),
 		TrustProxy:      os.Getenv("HOTFM_TRUST_PROXY") == "1",
 		DevCORS:         os.Getenv("HOTFM_DEV_CORS") == "1",
