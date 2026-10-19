@@ -1,0 +1,11 @@
+node_modules/
+web/dist/
+bin/
+data/
+*.db
+*.db-wal
+*.db-shm
+.DS_Store
+# Embedded web build output (a placeholder index.html is committed).
+server/internal/webui/dist/*
+!server/internal/webui/dist/index.html

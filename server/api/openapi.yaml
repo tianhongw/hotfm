@@ -1,0 +1,294 @@
+openapi: 3.0.3
+info:
+  title: HotFM API
+  version: "1.0"
+  description: |
+    Station catalog and stream proxy for HotFM (US + mainland China radio).
+    All endpoints live under /api/v1 so future clients (mobile, desktop) can
+    rely on a stable contract. Errors use `{"error": {"code", "message"}}`.
+servers:
+  - url: /api/v1
+paths:
+  /countries:
+    get:
+      summary: Supported countries with station counts
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Country" } }
+  /regions:
+    get:
+      summary: States (US) or provinces (CN) with station counts
+      parameters: [{ $ref: "#/components/parameters/country" }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/RegionCount" } }
+        "400": { $ref: "#/components/responses/Error" }
+  /tags:
+    get:
+      summary: Most common genres
+      parameters:
+        - { $ref: "#/components/parameters/country" }
+        - { $ref: "#/components/parameters/region" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [tag, count]
+                      properties:
+                        tag: { type: string }
+                        count: { type: integer }
+  /stations:
+    get:
+      summary: Search and browse stations (dead and removed stations are excluded)
+      parameters:
+        - { $ref: "#/components/parameters/countryOptional" }
+        - { $ref: "#/components/parameters/region" }
+        - { name: tag, in: query, schema: { type: string } }
+        - { name: band, in: query, schema: { type: string, enum: [fm, net] } }
+        - { name: freq, in: query, description: "FM frequency in MHz (matches ±0.05)", schema: { type: number, minimum: 87.5, maximum: 108 } }
+        - { name: q, in: query, description: "Search the full filtered catalog before pagination. Partial station names ignore case, accents, spacing and punctuation; Latin name words of 4-7 letters allow one edit and longer words allow two, including transpositions. City, region and tags support keyword matching.", schema: { type: string, maxLength: 64 } }
+        - { name: sort, in: query, description: "With q, popular ranks name relevance first and popularity second. Explicit freq and name sorts retain their ordering.", schema: { type: string, enum: [popular, freq, name], default: popular } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total, nextCursor]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Station" } }
+                  total: { type: integer }
+                  nextCursor: { type: string, nullable: true }
+        "400": { $ref: "#/components/responses/Error" }
+  /stations/batch:
+    post:
+      summary: Fetch stations by id (used to refresh locally stored favourites; includes offline ones)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids: { type: array, maxItems: 200, items: { type: string } }
+      responses:
+        "200":
+          description: Stations that still exist, in request order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Station" } }
+  /stations/{id}:
+    get:
+      summary: One station (offline stations are returned with offline=true)
+      parameters: [{ $ref: "#/components/parameters/id" }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Station" }
+        "404": { $ref: "#/components/responses/Error" }
+  /stations/{id}/click:
+    post:
+      summary: Register a play (forwarded to Radio Browser popularity stats)
+      parameters: [{ $ref: "#/components/parameters/id" }]
+      responses:
+        "204": { description: "Recorded" }
+  /stations/{id}/report:
+    post:
+      summary: Report a playback problem; schedules an immediate health re-check
+      parameters: [{ $ref: "#/components/parameters/id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind]
+              properties:
+                kind: { type: string, enum: [playback_error, stalled] }
+      responses:
+        "202": { description: "Accepted" }
+        "400": { $ref: "#/components/responses/Error" }
+  /dial:
+    get:
+      summary: FM stations grouped by frequency for the tuning dial
+      parameters:
+        - { $ref: "#/components/parameters/country" }
+        - { $ref: "#/components/parameters/region" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Dial" }
+  /stream/{id}:
+    get:
+      summary: Proxied audio stream (Icecast/Shoutcast); ICY metadata is stripped
+      parameters:
+        - { $ref: "#/components/parameters/id" }
+        - { $ref: "#/components/parameters/sid" }
+      responses:
+        "200":
+          description: Endless audio stream
+          content: { audio/mpeg: {}, audio/aac: {}, audio/ogg: {} }
+        "409": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+        "502": { $ref: "#/components/responses/Error" }
+  /stream/{id}/meta:
+    get:
+      summary: Server-Sent Events with "now playing" titles for a listening session
+      description: 'Emits `event: title` with data `{"title": "..."}`.'
+      parameters:
+        - { $ref: "#/components/parameters/id" }
+        - { $ref: "#/components/parameters/sidRequired" }
+      responses:
+        "200":
+          description: Event stream
+          content: { text/event-stream: {} }
+  /hls/{id}:
+    get:
+      summary: Proxied HLS root playlist; nested URIs are rewritten to signed /hls/{id}/r URLs
+      parameters: [{ $ref: "#/components/parameters/id" }]
+      responses:
+        "200":
+          description: Playlist
+          content: { application/vnd.apple.mpegurl: {} }
+        "502": { $ref: "#/components/responses/Error" }
+  /logo/{id}:
+    get:
+      summary: Cached station logo
+      parameters: [{ $ref: "#/components/parameters/id" }]
+      responses:
+        "200": { description: "Image" }
+        "404": { $ref: "#/components/responses/Error" }
+components:
+  parameters:
+    id: { name: id, in: path, required: true, schema: { type: string } }
+    country: { name: country, in: query, required: true, schema: { $ref: "#/components/schemas/CountryCode" } }
+    countryOptional: { name: country, in: query, schema: { $ref: "#/components/schemas/CountryCode" } }
+    region: { name: region, in: query, schema: { type: string }, description: "Region key from /regions" }
+    sid: { name: sid, in: query, schema: { type: string, pattern: "^[A-Za-z0-9_-]{8,64}$" }, description: "Listening session id that links the stream to /meta" }
+    sidRequired: { name: sid, in: query, required: true, schema: { type: string, pattern: "^[A-Za-z0-9_-]{8,64}$" } }
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+  schemas:
+    CountryCode: { type: string, enum: [US, CN] }
+    Health: { type: string, enum: [unknown, ok, flaky, dead] }
+    Country:
+      type: object
+      required: [code, count, syncedAt]
+      properties:
+        code: { $ref: "#/components/schemas/CountryCode" }
+        count: { type: integer }
+        syncedAt: { type: string, format: date-time, nullable: true }
+    Region:
+      type: object
+      required: [key, name, nameEn]
+      properties:
+        key: { type: string }
+        name: { type: string, description: "Native name (Chinese for CN)" }
+        nameEn: { type: string }
+    RegionCount:
+      allOf:
+        - $ref: "#/components/schemas/Region"
+        - type: object
+          required: [count, fmCount]
+          properties:
+            count: { type: integer }
+            fmCount: { type: integer }
+    Stream:
+      type: object
+      required: [type, url, proxied]
+      properties:
+        type: { type: string, enum: [audio, hls] }
+        url: { type: string, description: "Relative (proxied) or absolute (direct) URL" }
+        proxied: { type: boolean }
+    Station:
+      type: object
+      required: [id, name, country, region, city, freq, band, tags, codec, bitrate, homepage, logo, stream, health, offline, votes]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        country: { $ref: "#/components/schemas/CountryCode" }
+        region: { $ref: "#/components/schemas/Region" }
+        city: { type: string }
+        freq: { type: number, nullable: true, description: "FM frequency in MHz" }
+        band: { type: string, enum: [fm, net] }
+        tags: { type: array, items: { type: string } }
+        codec: { type: string }
+        bitrate: { type: integer }
+        homepage: { type: string }
+        logo: { type: string, nullable: true }
+        stream: { $ref: "#/components/schemas/Stream" }
+        health: { $ref: "#/components/schemas/Health" }
+        offline: { type: boolean, description: "Removed upstream or failed health checks" }
+        votes: { type: integer }
+    DialStation:
+      type: object
+      required: [id, name, city, health]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        city: { type: string }
+        health: { $ref: "#/components/schemas/Health" }
+    Dial:
+      type: object
+      required: [country, region, slots]
+      properties:
+        country: { $ref: "#/components/schemas/CountryCode" }
+        region: { type: string }
+        slots:
+          type: array
+          items:
+            type: object
+            required: [freq, total, stations]
+            properties:
+              freq: { type: number }
+              total: { type: integer }
+              stations: { type: array, maxItems: 8, items: { $ref: "#/components/schemas/DialStation" } }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }

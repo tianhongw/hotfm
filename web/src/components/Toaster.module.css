@@ -1,0 +1,50 @@
+.region {
+  position: fixed;
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 120;
+  pointer-events: none;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: var(--float);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 16px 36px var(--drop);
+  font-size: 13px;
+  color: var(--text);
+  animation: up 0.24s var(--ease-out);
+}
+
+.dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--amber);
+  box-shadow: var(--amber-glow);
+}
+
+@keyframes up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@media (max-width: 767px) {
+  .region {
+    bottom: calc(86px + env(safe-area-inset-bottom));
+  }
+}
+
+:global(:root[data-theme^='apple']) .region {
+  bottom: calc(100px + env(safe-area-inset-bottom));
+}

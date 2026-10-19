@@ -1,0 +1,75 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 16px;
+  background: var(--overlay);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: fade 0.16s ease-out;
+}
+
+.backdrop[data-variant='top'] {
+  align-items: flex-start;
+  padding-top: max(12vh, 16px);
+}
+
+.panel {
+  width: min(620px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--r-lg);
+  background: var(--panel);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 40px 80px var(--drop);
+  animation: pop 0.2s var(--ease-out);
+}
+
+.backdrop[data-variant='sheet'],
+.backdrop[data-variant='full'] {
+  align-items: flex-end;
+  padding: 0;
+}
+
+.panel[data-variant='sheet'] {
+  width: 100%;
+  max-height: 86dvh;
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  border-bottom: 0;
+  padding-bottom: env(safe-area-inset-bottom);
+  animation: rise 0.26s var(--ease-out);
+}
+
+.panel[data-variant='full'] {
+  width: 100%;
+  height: 100dvh;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  animation: fade 0.16s ease-out;
+}
+
+@keyframes rise {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.985);
+  }
+}

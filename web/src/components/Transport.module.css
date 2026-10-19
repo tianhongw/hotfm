@@ -1,0 +1,116 @@
+.transport {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.main {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.key {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 58px;
+  height: 52px;
+  border-radius: var(--r-md);
+  background: linear-gradient(180deg, var(--panel-3), var(--panel-2));
+  box-shadow: var(--shadow-key);
+  color: var(--text-2);
+  transition: transform 0.08s, color 0.15s;
+}
+
+.key .silk {
+  font-size: 8px;
+}
+
+.key:hover {
+  color: var(--text);
+}
+
+.key:active,
+.small:active {
+  transform: translateY(1px);
+}
+
+.power {
+  display: grid;
+  place-items: center;
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  color: var(--bg);
+  background: var(--power-face);
+  box-shadow:
+    0 0 0 4px var(--power-ring),
+    0 0 0 5px var(--line-2),
+    0 8px 20px var(--drop),
+    0 0 30px color-mix(in srgb, var(--amber) 18%, transparent);
+  transition: transform 0.1s var(--ease-out), box-shadow 0.2s;
+}
+
+.power:hover {
+  box-shadow:
+    0 0 0 4px var(--power-ring),
+    0 0 0 5px var(--line-3),
+    0 8px 20px var(--drop),
+    0 0 40px color-mix(in srgb, var(--amber) 32%, transparent);
+}
+
+.power:active {
+  transform: scale(0.96);
+}
+
+.power[data-active] {
+  background: var(--power-face-on);
+}
+
+.aux {
+  display: flex;
+  gap: 8px;
+}
+
+.anchor {
+  position: relative;
+}
+
+.small {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 34px;
+  border-radius: 8px;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.small:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--line-2);
+}
+
+.small:disabled {
+  opacity: 0.35;
+}
+
+.small[data-on] {
+  color: var(--amber);
+  border-color: color-mix(in srgb, var(--amber) 35%, transparent);
+  background: var(--amber-wash);
+}
+
+.menuTitle {
+  padding: 4px 10px 6px;
+}
+
+.transport[data-compact] .main {
+  gap: 22px;
+}

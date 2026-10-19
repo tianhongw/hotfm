@@ -1,0 +1,38 @@
+{
+  "name": "hotfm-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit -p . && vite build",
+    "typecheck": "tsc --noEmit -p .",
+    "test": "vitest run",
+    "gen:api": "openapi-typescript ../server/api/openapi.yaml -o src/api/schema.d.ts"
+  },
+  "dependencies": {
+    "@fontsource/ibm-plex-mono": "^5.1.0",
+    "@fontsource/ibm-plex-sans": "^5.1.0",
+    "@fontsource/noto-sans-sc": "^5.1.0",
+    "@tanstack/react-query": "^5.59.0",
+    "@tanstack/react-virtual": "^3.10.8",
+    "hls.js": "^1.5.17",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.11",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "openapi-typescript": "^7.4.1",
+    "typescript": "~5.6.3",
+    "vite": "^5.4.10",
+    "vitest": "^2.1.4"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}

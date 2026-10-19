@@ -1,0 +1,25 @@
+.logo {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 8px;
+  background: hsl(var(--hue) 14% var(--logo-bg-l));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #f4efe4;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: hsl(var(--hue) 30% var(--logo-fg-l));
+  user-select: none;
+}

@@ -1,0 +1,40 @@
+.meter {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 52px 1fr;
+  align-items: center;
+  gap: 10px;
+}
+
+.segs {
+  display: flex;
+  gap: 3px;
+  height: 10px;
+}
+
+.seg {
+  flex: 1;
+  border-radius: 1.5px;
+  background: color-mix(in srgb, var(--amber) 8%, transparent);
+  transition: background 0.08s, box-shadow 0.08s;
+}
+
+.thin {
+  height: 6px;
+  align-self: center;
+}
+
+.seg[data-on='1'] {
+  background: var(--amber);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--amber) 50%, transparent);
+}
+
+.seg[data-hot][data-on='1'] {
+  background: var(--red);
+  box-shadow: var(--red-glow);
+}

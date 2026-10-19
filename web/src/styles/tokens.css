@@ -1,0 +1,175 @@
+/*
+ * HotFM design tokens. Default and classic Hi-Fi share one set of names; components never hard-code colours.
+ *
+ * hifi (classic) — warm black faceplate, one amber VFD accent, one red needle.
+ *                   Amber is reserved for things that would glow on real hardware.
+ */
+:root,
+:root[data-theme='hifi'] {
+  color-scheme: dark;
+
+  --bg: #0d0c0a;
+  --bg-raise: #121110;
+  --panel: #16140f;
+  --panel-2: #1c1a14;
+  --panel-3: #23201a;
+  --inset: #080705;
+  --line: #2a261f;
+  --line-2: #3a342a;
+  --line-3: #4d463a;
+
+  --text: #ece5d6;
+  --text-2: #bdb4a1;
+  --muted: #8c8474;
+  --dim: #5f594d;
+
+  --amber: #ffb547;
+  --accent-contrast: #16140f;
+  --amber-hi: #ffd08a;
+  --amber-lo: #c98a2e;
+  --amber-ghost: rgba(255, 181, 71, 0.075);
+  --amber-wash: rgba(255, 181, 71, 0.12);
+  --amber-glow: 0 0 6px rgba(255, 181, 71, 0.55), 0 0 22px rgba(255, 160, 40, 0.22);
+  --red: #ff5a36;
+  --red-glow: 0 0 8px rgba(255, 90, 54, 0.7);
+  --ok: #9bd17a;
+
+  /* Surfaces that float above the page. */
+  --overlay: rgba(6, 5, 4, 0.72);
+  --float: rgba(30, 28, 22, 0.98);
+  --drop: rgba(0, 0, 0, 0.6);
+  --sheen: rgba(255, 255, 255, 0.025);
+
+  /* Hardware details. */
+  --screw: radial-gradient(circle at 40% 35%, #4a443a, #1a1814);
+  --screw-edge: #0b0a08;
+  --led-off: #2b2720;
+  --thumb: linear-gradient(180deg, #3a352c, #24211b);
+  --knob-hi: #3a352c;
+  --knob-lo: #1d1b16;
+  --knob-edge: #0a0907;
+  --knurl: rgba(255, 255, 255, 0.035);
+  --power-ring: #0c0b09;
+  --power-face: radial-gradient(circle at 50% 35%, #ffd189, var(--amber) 55%, #d48d2a);
+  --power-face-on: radial-gradient(circle at 50% 35%, #ffd8a0, #ffbe5c 55%, #e09634);
+  --screws: block;
+  --logo-bg-l: 15%;
+  --logo-fg-l: 74%;
+
+  /* VFD display window. Inside it, --amber* are remapped to these. */
+  --vfd-bg: radial-gradient(120% 90% at 30% 40%, rgba(255, 170, 60, 0.07), transparent 60%), linear-gradient(180deg, #0b0a07, #070604);
+  --vfd-glass:
+    linear-gradient(165deg, rgba(255, 255, 255, 0.045), transparent 38%),
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.18) 0 1px, transparent 1px 3px);
+  --vfd-fg: var(--amber);
+  --vfd-hi: var(--amber-hi);
+  --vfd-lo: var(--amber-lo);
+  --vfd-ghost: var(--amber-ghost);
+  --vfd-glow: var(--amber-glow);
+  --vfd-soft: #ffc878;
+  --vfd-name: #ffe2b0;
+  --vfd-name-glow: 0 0 14px rgba(255, 170, 60, 0.28);
+  --dial-bg: #0f0e0b;
+
+  /* Page backdrop: a warm pool of light + film grain. */
+  --page-pool: rgba(255, 170, 60, 0.06);
+  --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 .9  0 0 0 0 .8  0 0 0 .05 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+
+  --font-ui: 'IBM Plex Sans', 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Noto Sans SC', ui-monospace, monospace;
+  --font-seg: 'DSEG7', 'IBM Plex Mono', monospace;
+  --font-seg14: 'DSEG14', 'IBM Plex Mono', monospace;
+
+  --r-xl: 20px;
+  --r-lg: 14px;
+  --r-md: 10px;
+  --r-sm: 6px;
+
+  --shadow-panel: 0 1px 0 rgba(255, 255, 255, 0.035) inset, 0 30px 60px -30px rgba(0, 0, 0, 0.8);
+  --shadow-inset: inset 0 2px 10px rgba(0, 0, 0, 0.75), inset 0 0 0 1px rgba(0, 0, 0, 0.6);
+  --shadow-key: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 -1px 0 rgba(0, 0, 0, 0.5) inset, 0 2px 4px rgba(0, 0, 0, 0.45);
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --gutter: clamp(16px, 3vw, 32px);
+  --max: 1240px;
+}
+
+/* Apple: quiet surfaces, clear type, one radio-red accent. */
+:root[data-theme='apple'],
+:root[data-theme='apple-dark'] {
+  color-scheme: light;
+  --bg: #f5f5f7;
+  --bg-raise: #fafafa;
+  --panel: #ffffff;
+  --panel-2: #eaeaec;
+  --panel-3: #e1e1e5;
+  --inset: #f0f0f3;
+  --line: #e7e7eb;
+  --line-2: #d4d4da;
+  --line-3: #b1b1ba;
+  --text: #1d1d1f;
+  --text-2: #48484d;
+  --muted: #64646c;
+  --dim: #6c6c75;
+  --amber: #ce2944;
+  --accent-contrast: #ffffff;
+  --amber-hi: #be213b;
+  --amber-lo: #a6263b;
+  --amber-ghost: rgba(217, 46, 72, 0.06);
+  --amber-wash: rgba(217, 46, 72, 0.07);
+  --amber-glow: none;
+  --red: #ce2944;
+  --red-glow: none;
+  --ok: #248240;
+  --overlay: rgba(20, 20, 25, 0.25);
+  --float: #ffffff;
+  --drop: rgba(25, 25, 35, 0.1);
+  --sheen: transparent;
+  --page-pool: transparent;
+  --grain: none;
+  --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', 'PingFang SC', 'Noto Sans SC', sans-serif;
+  --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  --font-seg: var(--font-ui);
+  --font-seg14: var(--font-ui);
+  --shadow-panel: 0 4px 20px rgba(0, 0, 0, 0.04);
+  --shadow-inset: none;
+  --shadow-key: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --dial-bg: #f5f5f7;
+  --thumb: #ffffff;
+  --led-off: #d4d4da;
+  --logo-bg-l: 94%;
+  --logo-fg-l: 37%;
+  --r-xl: 22px;
+  --r-lg: 16px;
+  --r-md: 10px;
+  --r-sm: 6px;
+}
+:root[data-theme='apple-dark'] {
+  color-scheme: dark;
+  --bg: #161618;
+  --bg-raise: #1b1b1e;
+  --panel: #222225;
+  --panel-2: #2d2d32;
+  --panel-3: #3b3b42;
+  --inset: #1b1b1e;
+  --line: #34343a;
+  --line-2: #45454d;
+  --line-3: #60606a;
+  --text: #f5f5f7;
+  --text-2: #d0d0d8;
+  --muted: #a1a1ac;
+  --dim: #9b9ba5;
+  --amber: #ff687e;
+  --accent-contrast: #161618;
+  --amber-hi: #ff8193;
+  --amber-lo: #ff8193;
+  --amber-wash: rgba(255, 104, 126, 0.09);
+  --red: #ff687e;
+  --overlay: rgba(0, 0, 0, 0.5);
+  --float: #29292d;
+  --drop: rgba(0, 0, 0, 0.3);
+  --dial-bg: #1b1b1e;
+  --thumb: #3b3b42;
+  --logo-bg-l: 23%;
+  --logo-fg-l: 78%;
+}

@@ -1,0 +1,28 @@
+.box {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.box[data-scroll] {
+  mask-image: linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 24px), transparent);
+}
+
+.inner {
+  display: inline-block;
+}
+
+.box[data-scroll] .inner {
+  padding-left: 16px;
+  animation: scroll var(--dur) linear infinite;
+}
+
+@keyframes scroll {
+  0%,
+  12% {
+    transform: translateX(0);
+  }
+  88%,
+  100% {
+    transform: translateX(var(--shift));
+  }
+}

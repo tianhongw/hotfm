@@ -1,0 +1,92 @@
+.plate {
+  position: relative;
+  padding: 22px;
+  border-radius: var(--r-xl);
+  background:
+    linear-gradient(180deg, var(--sheen), transparent 30%),
+    var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-panel);
+  isolation: isolate;
+  animation: rise 0.6s var(--ease-out) both;
+}
+
+.screws {
+  display: var(--screws);
+}
+
+.screws i {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--screw);
+  box-shadow: 0 0 0 1px var(--screw-edge);
+}
+
+.screws i::after {
+  content: '';
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  top: 3px;
+  height: 1px;
+  background: var(--screw-edge);
+  transform: rotate(35deg);
+}
+
+.screws i:nth-child(1) {
+  top: 9px;
+  left: 9px;
+}
+.screws i:nth-child(2) {
+  top: 9px;
+  right: 9px;
+}
+.screws i:nth-child(3) {
+  bottom: 9px;
+  left: 9px;
+}
+.screws i:nth-child(4) {
+  bottom: 9px;
+  right: 9px;
+}
+
+.upper {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 22px;
+}
+
+.controls {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 6px 4px;
+}
+
+.knobBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+@media (max-width: 1080px) {
+  .upper {
+    grid-template-columns: 1fr;
+  }
+  .controls {
+    justify-content: center;
+    gap: 40px;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}

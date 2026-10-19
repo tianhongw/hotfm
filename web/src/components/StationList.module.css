@@ -1,0 +1,36 @@
+.list {
+  position: relative;
+  width: 100%;
+}
+
+.item {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+}
+
+/* A row with an open menu must paint above the rows after it. */
+.item:has([role='menu']) {
+  z-index: 20;
+}
+
+.empty {
+  padding: 48px 16px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r-lg);
+}
+
+.more {
+  position: absolute;
+  left: 0;
+  right: 0;
+  padding: 16px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+}

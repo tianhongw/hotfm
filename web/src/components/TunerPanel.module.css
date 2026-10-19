@@ -1,0 +1,57 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 18px;
+  animation: rise 0.28s var(--ease-out) both;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 4px;
+}
+
+.meter {
+  flex: 1;
+  max-width: 360px;
+}
+
+.noise {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 30px;
+  margin-left: auto;
+  border-radius: 8px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.noise:hover {
+  color: var(--text);
+  border-color: var(--line-2);
+}
+
+.noise[data-on] {
+  color: var(--amber);
+  border-color: color-mix(in srgb, var(--amber) 35%, transparent);
+  background: var(--amber-wash);
+}
+
+.panel[data-compact] {
+  margin-top: 0;
+}
+
+.panel[data-compact] .head {
+  padding: 0 2px;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
