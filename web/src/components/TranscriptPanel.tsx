@@ -1,6 +1,7 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import type { Station } from '../api/types'
-import { clock, elapsed, type Segment } from '../capture/export'
+import { clock, cueAt, dateTime, elapsed, type Cue, type Segment } from '../capture/export'
+import { closeReplay, cycleReplayRate, openReplay, seekReplay, skipReplay, toggleReplay } from '../capture/replay'
 import {
   canCapture,
   canRecord,
@@ -15,9 +16,21 @@ import { useNow } from '../hooks/useNow'
 import { useT } from '../i18n'
 import { useCapture } from '../stores/capture'
 import { usePlayer } from '../stores/player'
+import { useReplay } from '../stores/replay'
 import { READER_SIZE, useUI } from '../stores/ui'
 import { beginRecording } from './CaptureButtons'
-import { IconChevron, IconClose, IconDownload, IconExpand, IconRecord, IconShrink, IconTrash } from './Icons'
+import {
+  IconChevron,
+  IconClose,
+  IconDownload,
+  IconExpand,
+  IconImport,
+  IconPause,
+  IconPlay,
+  IconRecord,
+  IconShrink,
+  IconTrash,
+} from './Icons'
 import { Logo } from './Logo'
 import s from './TranscriptPanel.module.css'
 
@@ -323,17 +336,111 @@ function Footer() {
 
 type TextSegment = Extract<Segment, { kind: 'text' }>
 
-/** Full-window captions: the last few lines, newest biggest. The panel stays mounted underneath. */
+const hasFiles = (e: DragEvent) => e.dataTransfer.types.includes('Files')
+
+/**
+ * Full-window captions read like a page. The panel stays mounted underneath. An exported
+ * recording can be opened (or dropped) here to replay it with its transcript.
+ */
 export function CaptionStage() {
   const t = useT()
   const open = useUI((u) => u.transcriptOpen && u.captionsFull)
   const setFull = useUI((u) => u.setCaptionsFull)
+  const replaying = useReplay((r) => !!r.session)
+  const [dropping, setDropping] = useState(false)
+
+  // Leaving full screen (button, Escape, closing the panel) ends a replay.
+  useEffect(() => {
+    if (!open) closeReplay()
+  }, [open])
+  useReplayKeys(open && replaying)
+
   if (!open) return null
+  const exit = () => setFull(false)
   return (
-    <section className={s.stage} aria-label={t('capture.fullscreen')}>
-      <StageBar onExit={() => setFull(false)} />
-      <StageReader />
+    <section
+      className={s.stage}
+      aria-label={t('capture.fullscreen')}
+      onDragOver={(e) => {
+        if (!hasFiles(e)) return
+        e.preventDefault()
+        setDropping(true)
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropping(false)
+      }}
+      onDrop={(e) => {
+        if (!hasFiles(e)) return
+        e.preventDefault()
+        setDropping(false)
+        void openReplay([...e.dataTransfer.files])
+      }}
+    >
+      {replaying ? (
+        <>
+          <ReplayBar onExit={exit} />
+          <ReplayReader />
+          <ReplayTransport />
+        </>
+      ) : (
+        <>
+          <StageBar onExit={exit} />
+          <StageReader />
+        </>
+      )}
+      {dropping && (
+        <div className={s.dropOverlay} aria-hidden>
+          <IconImport size={28} />
+          {t('capture.drop')}
+        </div>
+      )}
     </section>
+  )
+}
+
+/** Space plays/pauses and ←/→ skip the replay instead of tuning the radio. */
+function useReplayKeys(on: boolean) {
+  useEffect(() => {
+    if (!on) return
+    // On document, so it runs before the window-level shortcuts and can claim the key.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.altKey || e.metaKey || e.ctrlKey || document.getElementById('root')?.inert) return
+      const el = e.target as HTMLElement
+      if (el.isContentEditable || el.closest('input, textarea, select')) return
+      if (e.key === ' ') {
+        if (el.closest('button')) return
+        toggleReplay()
+      } else if (e.key === 'ArrowLeft') skipReplay(-5000)
+      else if (e.key === 'ArrowRight') skipReplay(5000)
+      else return
+      e.preventDefault()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [on])
+}
+
+function ImportButton() {
+  const t = useT()
+  const input = useRef<HTMLInputElement>(null)
+  return (
+    <>
+      <button className={s.iconBtn} onClick={() => input.current?.click()} aria-label={t('capture.import')} title={t('capture.importHint')}>
+        <IconImport size={18} />
+      </button>
+      <input
+        ref={input}
+        type="file"
+        multiple
+        hidden
+        accept=".zip,.srt,.txt,.webm,.ogg,.m4a,audio/*"
+        onChange={(e) => {
+          const files = [...(e.target.files ?? [])]
+          e.target.value = ''
+          if (files.length) void openReplay(files)
+        }}
+      />
+    </>
   )
 }
 
@@ -362,6 +469,7 @@ function StageBar({ onExit }: { onExit: () => void }) {
       )}
       <StatusChip chip={chip} />
       <CaptionSwitch />
+      <ImportButton />
       <FontSize />
       <button className={s.iconBtn} onClick={onExit} aria-label={t('capture.exitFullscreen')} title={t('capture.exitFullscreen')}>
         <IconShrink size={18} />
@@ -466,5 +574,145 @@ function StageReader() {
         </button>
       )}
     </div>
+  )
+}
+
+function ReplayBar({ onExit }: { onExit: () => void }) {
+  const t = useT()
+  const session = useReplay((r) => r.session)
+  if (!session) return null
+  return (
+    <header className={s.stageBar}>
+      <div className={s.station}>
+        <Logo src={null} name={session.title} size={40} />
+        <span>
+          <strong>{session.title}</strong>
+          <small>
+            {t('capture.replay')}
+            {session.startedAt != null && ` · ${dateTime(session.startedAt)}`}
+          </small>
+        </span>
+      </div>
+      <span className={s.spacer} />
+      <button className={s.ghost} onClick={closeReplay}>
+        {t('capture.backToLive')}
+      </button>
+      <ImportButton />
+      <FontSize />
+      <button className={s.iconBtn} onClick={onExit} aria-label={t('capture.exitFullscreen')} title={t('capture.exitFullscreen')}>
+        <IconShrink size={18} />
+      </button>
+    </header>
+  )
+}
+
+const NO_CUES: Cue[] = []
+
+/** The whole transcript; the sentence being played is highlighted and kept in view, and clicking one seeks there. */
+function ReplayReader() {
+  const t = useT()
+  const cues = useReplay((r) => r.session?.cues ?? NO_CUES)
+  const current = useReplay((r) => (r.session ? cueAt(r.session.cues, r.time) : -1))
+  const size = useUI((u) => u.readerSize)
+  const blocks = useMemo(() => toBlocks(cues.map((c, i) => ({ kind: 'text' as const, id: i, at: c.from, dur: c.to - c.from, text: c.text }))), [cues])
+  const box = useRef<HTMLDivElement>(null)
+  // Scrolling away to read elsewhere stops following until "back to current".
+  const [follow, setFollow] = useState(true)
+
+  useEffect(() => {
+    if (!follow || current < 0) return
+    const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    box.current?.querySelector(`[data-cue="${current}"]`)?.scrollIntoView({ block: 'center', behavior: smooth ? 'smooth' : 'auto' })
+  }, [current, follow])
+
+  const unfollow = () => setFollow(false)
+  return (
+    <div className={s.logWrap}>
+      <div
+        className={s.reader}
+        ref={box}
+        onWheel={unfollow}
+        onTouchMove={unfollow}
+        onPointerDown={(e) => e.target === e.currentTarget && unfollow()}
+        tabIndex={0}
+      >
+        <article className={s.page} style={{ fontSize: size }}>
+          {cues.length === 0 && <p className={s.readerEmpty}>{t('capture.replayNoCaptions')}</p>}
+          {blocks.map(
+            (b) =>
+              b.kind === 'para' && (
+                <p key={b.id}>
+                  {b.segs.map((seg, i) => (
+                    <Fragment key={seg.id}>
+                      {i > 0 && ' '}
+                      <span
+                        className={s.cue}
+                        data-cue={seg.id}
+                        data-state={seg.id < current ? 'past' : seg.id === current ? 'current' : 'future'}
+                        onClick={() => {
+                          setFollow(true)
+                          seekReplay(seg.at)
+                        }}
+                      >
+                        {seg.text}
+                      </span>
+                    </Fragment>
+                  ))}
+                </p>
+              ),
+          )}
+        </article>
+      </div>
+      {!follow && current >= 0 && (
+        <button className={s.jump} onClick={() => setFollow(true)}>
+          <IconChevron size={14} />
+          {t('capture.jumpCurrent')}
+        </button>
+      )}
+    </div>
+  )
+}
+
+function ReplayTransport() {
+  const t = useT()
+  const time = useReplay((r) => r.time)
+  const duration = useReplay((r) => r.duration)
+  const playing = useReplay((r) => r.playing)
+  const rate = useReplay((r) => r.rate)
+  const at = Math.min(time, duration)
+  return (
+    <footer className={s.transport}>
+      <button className={s.skip} onClick={() => skipReplay(-15_000)} aria-label={t('capture.back15')} title={t('capture.back15')}>
+        −15
+      </button>
+      <button
+        className={s.playBtn}
+        onClick={toggleReplay}
+        aria-label={playing ? t('capture.pause') : t('capture.play')}
+        title={playing ? t('capture.pause') : t('capture.play')}
+      >
+        {playing ? <IconPause size={20} /> : <IconPlay size={20} />}
+      </button>
+      <button className={s.skip} onClick={() => skipReplay(15_000)} aria-label={t('capture.fwd15')} title={t('capture.fwd15')}>
+        +15
+      </button>
+      <time className={s.time}>{elapsed(at)}</time>
+      <input
+        className={s.seek}
+        type="range"
+        min={0}
+        max={Math.max(duration, 1)}
+        step={100}
+        value={at}
+        onChange={(e) => seekReplay(+e.target.value)}
+        aria-label={t('capture.seek')}
+        aria-valuetext={elapsed(at)}
+        style={{ ['--p' as string]: `${duration ? (at / duration) * 100 : 0}%` }}
+      />
+      <time className={s.time}>{elapsed(duration)}</time>
+      <button className={s.speed} onClick={cycleReplayRate} aria-label={t('capture.speed')} title={t('capture.speed')}>
+        {rate}×
+      </button>
+    </footer>
   )
 }

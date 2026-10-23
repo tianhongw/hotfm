@@ -705,11 +705,144 @@
   color: var(--muted);
 }
 
+/* --- replaying an imported recording --- */
+
+.cue {
+  border-radius: 4px;
+  cursor: pointer;
+  transition: color 0.2s, background-color 0.2s;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+.cue:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--line-3);
+  text-underline-offset: 0.2em;
+}
+
+.cue[data-state='future'] {
+  color: var(--muted);
+}
+
+.cue[data-state='current'] {
+  background: color-mix(in srgb, var(--amber) 16%, transparent);
+  box-shadow: 0 0 0 0.12em color-mix(in srgb, var(--amber) 16%, transparent);
+}
+
+.transport {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 24px calc(14px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line);
+}
+
+.skip,
+.speed {
+  flex: none;
+  height: 30px;
+  min-width: 40px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font: 600 12px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+}
+
+.skip:hover,
+.speed:hover {
+  color: var(--text);
+  background: var(--panel-2);
+}
+
+.speed {
+  min-width: 52px;
+  background: var(--panel-2);
+}
+
+.playBtn {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--amber);
+  color: var(--accent-contrast);
+}
+
+.playBtn:hover {
+  filter: brightness(1.06);
+}
+
+.time {
+  flex: none;
+  min-width: 44px;
+  text-align: center;
+  font: 12px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.seek {
+  flex: 1;
+  min-width: 0;
+  height: 4px;
+  margin: 0 4px;
+  border-radius: 999px;
+  appearance: none;
+  background: linear-gradient(to right, var(--amber) var(--p, 0%), var(--line-2) var(--p, 0%));
+  cursor: pointer;
+}
+
+.seek::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--amber);
+  border: none;
+}
+
+.seek::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--amber);
+  border: none;
+}
+
+.seek:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 4px;
+}
+
+.dropOverlay {
+  position: absolute;
+  inset: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border: 2px dashed var(--amber);
+  border-radius: var(--r-xl);
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .panel,
   .line,
   .stage {
     animation: none;
+  }
+  .cue {
+    transition: none;
   }
   .chip i,
   .recStrip i,

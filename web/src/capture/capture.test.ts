@@ -1,7 +1,21 @@
 import { strFromU8, unzipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
 import { Chunker, cleanText, resample, rms } from './dsp'
-import { buildZip, elapsed, fileBase, inRange, slug, toSrt, toTxt, type Segment } from './export'
+import {
+  buildZip,
+  cueAt,
+  elapsed,
+  fileBase,
+  inRange,
+  parseFileBase,
+  parseSrt,
+  parseTxtHeader,
+  readExport,
+  slug,
+  toSrt,
+  toTxt,
+  type Segment,
+} from './export'
 
 const tone = (n: number, amp: number) => Float32Array.from({ length: n }, (_, i) => amp * Math.sin(i / 3))
 
@@ -159,5 +173,67 @@ describe('export', () => {
     expect(Object.keys(files).sort()).toEqual(['audio.webm', 'transcript.srt', 'transcript.txt'])
     expect(Array.from(files['audio.webm']!)).toEqual([1, 2, 3])
     expect(strFromU8(files['transcript.txt']!)).toBe('txt')
+  })
+})
+
+describe('import', () => {
+  const start = new Date(2026, 9, 23, 14, 5, 30).getTime()
+  const segs: Segment[] = [
+    { kind: 'text', id: 1, at: start + 1_000, dur: 2_500, text: 'Good evening.' },
+    { kind: 'text', id: 2, at: start + 4_000, dur: 3_000, text: 'Here is the news.' },
+  ]
+
+  it('reads back SubRip cues', () => {
+    expect(parseSrt(toSrt(segs, start))).toEqual([
+      { from: 1_000, to: 3_500, text: 'Good evening.' },
+      { from: 4_000, to: 7_000, text: 'Here is the news.' },
+    ])
+    expect(parseSrt('\uFEFF1\r\n00:01:02.5 --> 00:01:04,000\r\nline one\r\nline two')).toEqual([
+      { from: 62_500, to: 64_000, text: 'line one line two' },
+    ])
+    expect(parseSrt('')).toEqual([])
+  })
+
+  it('finds the cue playing at a time', () => {
+    const cues = parseSrt(toSrt(segs, start))
+    expect(cueAt(cues, 0)).toBe(-1)
+    expect(cueAt(cues, 1_000)).toBe(0)
+    expect(cueAt(cues, 3_800)).toBe(0) // the pause after a sentence keeps it current
+    expect(cueAt(cues, 4_000)).toBe(1)
+    expect(cueAt(cues, 99_000)).toBe(1)
+    expect(cueAt([], 10)).toBe(-1)
+  })
+
+  it('reads the station and start back from the transcript and file name', () => {
+    const minute = new Date(2026, 9, 23, 14, 5).getTime()
+    expect(parseTxtHeader(toTxt(segs, 'BBC Radio 4', start, start + 60_000))).toEqual({ title: 'BBC Radio 4', startedAt: minute })
+    expect(parseTxtHeader('hello\nworld')).toBeNull()
+    expect(parseFileBase(`${fileBase('BBC Radio 4', start)}.zip`)).toEqual({ title: 'bbc radio 4', startedAt: minute })
+    expect(parseFileBase('song.mp3')).toBeNull()
+  })
+
+  it('opens an exported zip', () => {
+    const audio = new Uint8Array([1, 2, 3])
+    const zip = buildZip(audio, 'webm', toTxt(segs, 'BBC Radio 4', start, start + 60_000), toSrt(segs, start))
+    const got = readExport([{ name: `${fileBase('BBC Radio 4', start)}.zip`, data: zip }])!
+    expect(got.title).toBe('BBC Radio 4')
+    expect(got.cues).toHaveLength(2)
+    expect(got.audio.type).toBe('audio/webm')
+    expect(got.audio.size).toBe(3)
+  })
+
+  it('opens loose audio with its captions, or audio alone', () => {
+    const srt = new TextEncoder().encode(toSrt(segs, start))
+    const name = fileBase('KQED', start)
+    const both = readExport([
+      { name: `${name}.srt`, data: srt },
+      { name: `${name}.m4a`, data: new Blob([new Uint8Array(4)]) },
+    ])!
+    expect(both.title).toBe('kqed')
+    expect(both.audio.type).toBe('audio/mp4')
+    expect(both.cues).toHaveLength(2)
+    const alone = readExport([{ name: 'show.webm', data: new Blob([new Uint8Array(2)], { type: 'audio/webm' }) }])!
+    expect(alone).toMatchObject({ title: 'show', startedAt: null, cues: [] })
+    expect(readExport([{ name: 'x.srt', data: srt }])).toBeNull()
   })
 })

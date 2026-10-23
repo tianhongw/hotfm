@@ -19,6 +19,12 @@ export const IconPlay = ({ size, ...p }: P) => (
     <path d="M8 5.5v13l10.5-6.5z" fill="currentColor" stroke="none" />
   </svg>
 )
+export const IconPause = ({ size, ...p }: P) => (
+  <svg {...base(size)} {...p}>
+    <rect x="6.5" y="5.5" width="3.8" height="13" rx="1.2" fill="currentColor" stroke="none" />
+    <rect x="13.7" y="5.5" width="3.8" height="13" rx="1.2" fill="currentColor" stroke="none" />
+  </svg>
+)
 export const IconStop = ({ size, ...p }: P) => (
   <svg {...base(size)} {...p}>
     <rect x="6.5" y="6.5" width="11" height="11" rx="1.5" fill="currentColor" stroke="none" />
@@ -149,6 +155,11 @@ export const IconRecord = ({ size, ...p }: P) => (
 export const IconDownload = ({ size, ...p }: P) => (
   <svg {...base(size)} {...p}>
     <path d="M12 4.5v10.5M7.5 10.8 12 15.3l4.5-4.5M5 19.5h14" />
+  </svg>
+)
+export const IconImport = ({ size, ...p }: P) => (
+  <svg {...base(size)} {...p}>
+    <path d="M12 15V4.5M7.5 9 12 4.5 16.5 9M5 14.5v3.5a1.5 1.5 0 0 0 1.5 1.5h11a1.5 1.5 0 0 0 1.5-1.5v-3.5" />
   </svg>
 )
 export const IconExpand = ({ size, ...p }: P) => (
