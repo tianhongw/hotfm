@@ -41,7 +41,12 @@ export class PlayerEngine {
   private hls: Hls | null = null
   private meta: EventSource | null = null
   private analyser: AnalyserNode | null = null
+  /** proxiedEl's node in the Web Audio graph; captions and recording tap it before volume. */
+  private source: MediaElementAudioSourceNode | null = null
+  private gain: GainNode | null = null
   private graphReady = false
+  /** Play direct stations through the proxy so the graph can hear them. */
+  private preferProxy = false
   private station: Station | null = null
   private listeners = new Set<Listener>()
   private wantPlaying = false
@@ -105,17 +110,74 @@ export class PlayerEngine {
     const ctx = audioContext()
     if (!ctx) return
     try {
+      // Volume lives in the gain node so taps get full-level audio even when muted.
       const src = ctx.createMediaElementSource(this.proxiedEl)
+      const gain = ctx.createGain()
       const analyser = ctx.createAnalyser()
       analyser.fftSize = 512
       analyser.smoothingTimeConstant = 0.6
-      src.connect(analyser)
+      src.connect(gain)
+      gain.connect(analyser)
       analyser.connect(ctx.destination)
+      this.source = src
+      this.gain = gain
       this.analyser = analyser
       this.graphReady = true
+      this.applyVolume()
     } catch {
       this.graphReady = true // never retry; playback still works without the meter
     }
+  }
+
+  /** True once the graph exists, i.e. proxied audio can be tapped. */
+  get capable(): boolean {
+    return this.source != null
+  }
+
+  /** Feeds the station's audio (pre-volume) into `node`; returns a disconnect function. */
+  tap(node: AudioNode): () => void {
+    const src = this.source
+    if (!src) return () => {}
+    src.connect(node)
+    return () => {
+      try {
+        src.disconnect(node)
+      } catch {
+        /* already disconnected */
+      }
+    }
+  }
+
+  /** Whether a station can be routed through the graph (proxied, or with a proxy fallback). */
+  canTap(st: Station): boolean {
+    return this.capable && (st.stream.proxied || !!st.stream.proxy)
+  }
+
+  /**
+   * Captions and recording need the proxy. Turning it on moves a playing direct
+   * station over at once; turning it off waits for the next start so playback
+   * is not interrupted.
+   */
+  setPreferProxy(v: boolean) {
+    if (this.preferProxy === v) return
+    this.preferProxy = v
+    const st = this.station
+    if (!st || !v) return
+    const el = this.route(st).el
+    if (el === this.el) return
+    const playing = this.wantPlaying
+    this.teardown()
+    this.el = el
+    if (playing) {
+      this.retries = 0
+      this.start()
+    }
+  }
+
+  private route(st: Station): { el: HTMLAudioElement; url: string; proxied: boolean } {
+    if (st.stream.proxied) return { el: this.proxiedEl, url: st.stream.url, proxied: true }
+    if (this.preferProxy && this.capable && st.stream.proxy) return { el: this.proxiedEl, url: st.stream.proxy, proxied: true }
+    return { el: this.directEl, url: st.stream.url, proxied: false }
   }
 
   load(station: Station, autoplay = true) {
@@ -123,8 +185,7 @@ export class PlayerEngine {
     this.station = station
     this.retries = 0
     this.announced = false
-    this.el = station.stream.proxied ? this.proxiedEl : this.directEl
-    this.applyVolume()
+    this.el = this.route(station).el
     if (autoplay) this.start()
     else this.emit({ type: 'status', status: 'idle' })
   }
@@ -165,8 +226,14 @@ export class PlayerEngine {
   }
 
   private applyVolume() {
-    const v = this.muted ? 0 : this.volume * this.duck * this.fade
-    for (const el of [this.proxiedEl, this.directEl]) el.volume = Math.max(0, Math.min(1, v))
+    const v = Math.max(0, Math.min(1, this.muted ? 0 : this.volume * this.duck * this.fade))
+    this.directEl.volume = v
+    if (this.gain) {
+      this.proxiedEl.volume = 1
+      this.gain.gain.value = v
+    } else {
+      this.proxiedEl.volume = v
+    }
   }
 
   /** Fills `out` with frequency data; returns false when no meter is available. */
@@ -182,6 +249,9 @@ export class PlayerEngine {
     this.teardown()
     this.wantPlaying = true
     this.emit({ type: 'status', status: 'connecting' })
+    // Re-route on every start: the proxy preference may have changed since load.
+    const r = this.route(st)
+    this.el = r.el
     const el = this.el
     const sid = randomId()
 
@@ -189,8 +259,8 @@ export class PlayerEngine {
       void this.startHls(st, el, this.generation)
       return
     }
-    el.src = st.stream.proxied ? `${st.stream.url}?sid=${sid}` : st.stream.url
-    if (st.stream.proxied) this.openMeta(st.id, sid)
+    el.src = r.proxied ? `${r.url}?sid=${sid}` : r.url
+    if (r.proxied) this.openMeta(st.id, sid)
     this.begin(el)
   }
 

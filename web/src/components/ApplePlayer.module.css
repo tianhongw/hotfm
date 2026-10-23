@@ -55,6 +55,10 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.text > span[data-caption] {
+  color: var(--text-2);
+  font-style: italic;
+}
 .text i[data-live] {
   display: inline-block;
   width: 5px;

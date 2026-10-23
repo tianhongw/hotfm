@@ -581,6 +581,8 @@ export interface components {
             /** @description Relative (proxied) or absolute (direct) URL */
             url: string;
             proxied: boolean;
+            /** @description Same-origin proxy URL for direct streams; used when the client needs the raw audio (captions, recording) */
+            proxy?: string;
         };
         Station: {
             id: string;
@@ -593,6 +595,8 @@ export interface components {
             /** @enum {string} */
             band: "fm" | "net";
             tags: string[];
+            /** @description Lowercased, comma-separated languages from Radio Browser; may be empty */
+            language: string;
             codec: string;
             bitrate: number;
             homepage: string;

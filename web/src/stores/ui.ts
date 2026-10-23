@@ -36,6 +36,8 @@ interface UIState {
   sheetOpen: boolean
   /** Tuning dial + signal meter panel; hidden by default to keep the tuner simple. */
   dialOpen: boolean
+  /** Live captions / recording side panel. */
+  transcriptOpen: boolean
   toast: Toast | null
 
   setCountry: (c: CountryCode) => void
@@ -54,6 +56,7 @@ interface UIState {
   setShortcutsOpen: (o: boolean) => void
   setSheetOpen: (o: boolean) => void
   setDialOpen: (o: boolean) => void
+  setTranscriptOpen: (o: boolean) => void
   showToast: (text: string) => void
 }
 
@@ -76,6 +79,7 @@ export const useUI = create<UIState>()(
       shortcutsOpen: false,
       sheetOpen: false,
       dialOpen: false,
+      transcriptOpen: false,
       toast: null,
 
       setCountry: (country) => set((s) => (s.country === country ? s : { country, region: '' })),
@@ -112,6 +116,7 @@ export const useUI = create<UIState>()(
       setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
       setSheetOpen: (sheetOpen) => set({ sheetOpen }),
       setDialOpen: (dialOpen) => set({ dialOpen }),
+      setTranscriptOpen: (transcriptOpen) => set({ transcriptOpen }),
       showToast: (text) => set({ toast: { id: ++seq, text } }),
     }),
     {

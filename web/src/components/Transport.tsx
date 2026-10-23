@@ -4,6 +4,7 @@ import { seek, setSleep, toggleFavorite, togglePlay } from '../player/controller
 import { useLibrary } from '../stores/library'
 import { usePlayer } from '../stores/player'
 import { useUI } from '../stores/ui'
+import { CaptureButtons } from './CaptureButtons'
 import { IconDial, IconHeart, IconMoon, IconPlay, IconSeekNext, IconSeekPrev, IconStop } from './Icons'
 import { MenuItem, Popover } from './Popover'
 import s from './Transport.module.css'
@@ -92,6 +93,7 @@ export function Transport({ compact = false }: { compact?: boolean }) {
             )}
           </Popover>
         </div>
+        <CaptureButtons className={s.small} />
         <button
           className={s.small}
           data-on={dialOpen || undefined}

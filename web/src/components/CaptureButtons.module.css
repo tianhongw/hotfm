@@ -1,0 +1,50 @@
+.cc[data-on] {
+  color: var(--amber);
+}
+
+.rec:not(:disabled):hover {
+  color: var(--red);
+}
+
+/* While recording the button becomes a pill, so it is never easy to forget.
+   Doubled class: wins over the host's generic `.right button` rules. */
+.recPill.recPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 12px 0 10px;
+  border-radius: 999px;
+  color: var(--red);
+  background: color-mix(in srgb, var(--red) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--red) 30%, transparent);
+  font: 500 12px/1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.recPill.recPill:hover {
+  background: color-mix(in srgb, var(--red) 18%, transparent);
+}
+
+.recPill i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: var(--red-glow);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recPill i {
+    animation: none;
+  }
+}

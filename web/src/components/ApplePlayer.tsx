@@ -4,9 +4,12 @@ import { useIsMobile } from '../hooks/useMediaQuery'
 import { useT } from '../i18n'
 import { formatFreq } from '../lib/dial'
 import { seek, setSleep, toggleFavorite, togglePlay } from '../player/controller'
+import { isEnglish } from '../capture/session'
+import { latestText, useCapture } from '../stores/capture'
 import { useLibrary } from '../stores/library'
 import { usePlayer } from '../stores/player'
 import { useUI } from '../stores/ui'
+import { CaptureButtons } from './CaptureButtons'
 import { Dialog } from './Dialog'
 import { IconChevron, IconClose, IconHeart, IconPlay, IconSeekNext, IconSeekPrev, IconSpeaker, IconStop, IconWave } from './Icons'
 import { Logo } from './Logo'
@@ -23,6 +26,10 @@ export function ApplePlayer() {
   const active = status === 'playing' || status === 'connecting' || status === 'buffering'
   const favorite = !!station && favorites.some((f) => f.id === station.id)
   const canSeek = !!dial.data?.slots.length
+  // While captions run, the bar shows the latest line instead of the stream title.
+  const caption = useCapture((c) =>
+    c.captionsOn && status === 'playing' && isEnglish(station) ? (c.interim?.text ?? latestText(c.segments)?.text) : undefined,
+  )
   const close = useCallback(() => {
     setSheetOpen(false)
     setDialOpen(false)
@@ -85,14 +92,15 @@ export function ApplePlayer() {
             )}
             <span className={s.text}>
               <strong>{station?.name ?? t('player.ready')}</strong>
-              <span>
+              <span data-caption={caption ? true : undefined}>
                 <i data-live={status === 'playing' || undefined} />
-                {description}
+                {caption ?? description}
               </span>
             </span>
           </button>
           {controls}
           <div className={s.right}>
+            <CaptureButtons />
             <button
               className={s.favorite}
               disabled={!station}

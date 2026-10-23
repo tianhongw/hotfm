@@ -134,3 +134,20 @@ export const IconTag = ({ size, ...p }: P) => (
     <circle cx="8.6" cy="8.6" r="1.2" fill="currentColor" stroke="none" />
   </svg>
 )
+export const IconCaptions = ({ size, ...p }: P) => (
+  <svg {...base(size)} {...p}>
+    <rect x="3.5" y="5.5" width="17" height="13" rx="2.5" />
+    <path d="M10.6 10.2a2.2 2.2 0 1 0 0 3.6M17 10.2a2.2 2.2 0 1 0 0 3.6" />
+  </svg>
+)
+export const IconRecord = ({ size, ...p }: P) => (
+  <svg {...base(size)} {...p}>
+    <circle cx="12" cy="12" r="7.5" />
+    <circle cx="12" cy="12" r="3.6" fill="currentColor" stroke="none" />
+  </svg>
+)
+export const IconDownload = ({ size, ...p }: P) => (
+  <svg {...base(size)} {...p}>
+    <path d="M12 4.5v10.5M7.5 10.8 12 15.3l4.5-4.5M5 19.5h14" />
+  </svg>
+)

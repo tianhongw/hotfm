@@ -35,6 +35,13 @@
   color: var(--muted);
 }
 
+/* Make room for the captions panel when the window is wide enough. */
+@media (min-width: 1100px) {
+  .app[data-transcript] {
+    padding-right: 412px;
+  }
+}
+
 .app[data-mobile] .main {
   gap: 20px;
 }

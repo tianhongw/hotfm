@@ -14,6 +14,9 @@ export default defineConfig({
       '/healthz': { target: api },
     },
   },
+  // transformers.js runs in a worker that code-splits (onnxruntime backends).
+  worker: { format: 'es' },
+  optimizeDeps: { exclude: ['@huggingface/transformers'] },
   build: {
     target: 'es2020',
     sourcemap: true,

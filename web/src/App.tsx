@@ -6,6 +6,8 @@ import { useLibrary } from './stores/library'
 import { ShortcutsDialog } from './components/ShortcutsDialog'
 import { StationBrowser } from './components/StationBrowser'
 import { Toaster } from './components/Toaster'
+import { TranscriptPanel } from './components/TranscriptPanel'
+import { useUI } from './stores/ui'
 import { useBootstrap } from './hooks/useBootstrap'
 import { useKeyboard } from './hooks/useKeyboard'
 import { useIsMobile } from './hooks/useMediaQuery'
@@ -16,8 +18,9 @@ export function App() {
   useKeyboard()
   const mobile = useIsMobile()
   const apple = useLibrary((l) => l.theme === 'apple')
+  const transcript = useUI((u) => u.transcriptOpen) && !mobile
   return (
-    <div className={s.app} data-mobile={mobile || undefined} data-apple={apple || undefined}>
+    <div className={s.app} data-mobile={mobile || undefined} data-apple={apple || undefined} data-transcript={transcript || undefined}>
       <div className={s.inner}>
         <Header />
         <main className={s.main}>
@@ -42,6 +45,7 @@ export function App() {
       {!apple && mobile && <MiniPlayer />}
       {!apple && mobile && <PlayerSheet />}
       {apple && <ApplePlayer />}
+      {!mobile && <TranscriptPanel docked={apple} />}
       <ShortcutsDialog />
       <Toaster />
     </div>

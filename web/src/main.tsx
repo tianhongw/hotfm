@@ -14,6 +14,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
+import { initCapture } from './capture/session'
 import { initPlayer, queryClient } from './player/controller'
 import { initMediaSession } from './player/mediaSession'
 import { initTuning } from './player/tuning'
@@ -23,6 +24,7 @@ import { resolvedTheme } from './lib/appearance'
 initPlayer()
 initTuning()
 initMediaSession()
+initCapture()
 
 const syncLang = () => (document.documentElement.lang = useLibrary.getState().lang === 'zh' ? 'zh-CN' : 'en')
 syncLang()

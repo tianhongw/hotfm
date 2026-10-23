@@ -17,6 +17,9 @@ type streamDTO struct {
 	Type    string `json:"type"` // audio | hls
 	URL     string `json:"url"`
 	Proxied bool   `json:"proxied"`
+	// Proxy is the same-origin route for a direct stream, for clients that
+	// need the decoded audio (captions, recording) and so cannot use CORS.
+	Proxy string `json:"proxy,omitempty"`
 }
 
 type stationDTO struct {
@@ -28,6 +31,7 @@ type stationDTO struct {
 	Freq     *float64  `json:"freq"`
 	Band     string    `json:"band"`
 	Tags     []string  `json:"tags"`
+	Language string    `json:"language"`
 	Codec    string    `json:"codec"`
 	Bitrate  int       `json:"bitrate"`
 	Homepage string    `json:"homepage"`
@@ -42,7 +46,7 @@ func (s *Server) stationDTO(st *store.Station) stationDTO {
 	d := stationDTO{
 		ID: st.ID, Name: st.Name, Country: st.Country,
 		Region: regionDTO{st.RegionKey, st.RegionName, st.RegionEn},
-		City:   st.City, Freq: st.Freq, Band: st.Band, Tags: st.Tags, Codec: st.Codec,
+		City:   st.City, Freq: st.Freq, Band: st.Band, Tags: st.Tags, Language: st.Language, Codec: st.Codec,
 		Bitrate: st.Bitrate, Homepage: st.Homepage, Health: st.Health, Offline: !st.Visible(), Votes: st.Votes,
 		Stream: s.streamFor(st),
 	}
@@ -61,10 +65,11 @@ func (s *Server) streamFor(st *store.Station) streamDTO {
 	if st.HLS {
 		return streamDTO{Type: "hls", URL: "/api/v1/hls/" + id, Proxied: true}
 	}
+	proxy := "/api/v1/stream/" + id
 	if s.cfg.StreamMode == "auto" && strings.HasPrefix(st.StreamURL, "https://") {
-		return streamDTO{Type: "audio", URL: st.StreamURL, Proxied: false}
+		return streamDTO{Type: "audio", URL: st.StreamURL, Proxied: false, Proxy: proxy}
 	}
-	return streamDTO{Type: "audio", URL: "/api/v1/stream/" + id, Proxied: true}
+	return streamDTO{Type: "audio", URL: proxy, Proxied: true}
 }
 
 type dialStationDTO struct {

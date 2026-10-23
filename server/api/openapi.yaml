@@ -239,9 +239,10 @@ components:
         type: { type: string, enum: [audio, hls] }
         url: { type: string, description: "Relative (proxied) or absolute (direct) URL" }
         proxied: { type: boolean }
+        proxy: { type: string, description: "Same-origin proxy URL for direct streams; used when the client needs the raw audio (captions, recording)" }
     Station:
       type: object
-      required: [id, name, country, region, city, freq, band, tags, codec, bitrate, homepage, logo, stream, health, offline, votes]
+      required: [id, name, country, region, city, freq, band, tags, language, codec, bitrate, homepage, logo, stream, health, offline, votes]
       properties:
         id: { type: string }
         name: { type: string }
@@ -251,6 +252,7 @@ components:
         freq: { type: number, nullable: true, description: "FM frequency in MHz" }
         band: { type: string, enum: [fm, net] }
         tags: { type: array, items: { type: string } }
+        language: { type: string, description: "Lowercased, comma-separated languages from Radio Browser; may be empty" }
         codec: { type: string }
         bitrate: { type: integer }
         homepage: { type: string }
