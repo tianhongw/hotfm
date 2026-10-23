@@ -38,6 +38,10 @@ interface UIState {
   dialOpen: boolean
   /** Live captions / recording side panel. */
   transcriptOpen: boolean
+  /** Captions shown big across the whole window; session-only, the side panel is the default. */
+  captionsFull: boolean
+  /** Type size of the full-screen captions, in px. */
+  readerSize: number
   toast: Toast | null
 
   setCountry: (c: CountryCode) => void
@@ -57,10 +61,14 @@ interface UIState {
   setSheetOpen: (o: boolean) => void
   setDialOpen: (o: boolean) => void
   setTranscriptOpen: (o: boolean) => void
+  setCaptionsFull: (o: boolean) => void
+  setReaderSize: (px: number) => void
   showToast: (text: string) => void
 }
 
 let seq = 0
+
+export const READER_SIZE = { min: 14, max: 32, step: 2, initial: 20 }
 
 export const useUI = create<UIState>()(
   persist(
@@ -80,6 +88,8 @@ export const useUI = create<UIState>()(
       sheetOpen: false,
       dialOpen: false,
       transcriptOpen: false,
+      captionsFull: false,
+      readerSize: READER_SIZE.initial,
       toast: null,
 
       setCountry: (country) => set((s) => (s.country === country ? s : { country, region: '' })),
@@ -116,7 +126,9 @@ export const useUI = create<UIState>()(
       setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
       setSheetOpen: (sheetOpen) => set({ sheetOpen }),
       setDialOpen: (dialOpen) => set({ dialOpen }),
-      setTranscriptOpen: (transcriptOpen) => set({ transcriptOpen }),
+      setTranscriptOpen: (transcriptOpen) => set(transcriptOpen ? { transcriptOpen } : { transcriptOpen, captionsFull: false }),
+      setCaptionsFull: (captionsFull) => set({ captionsFull }),
+      setReaderSize: (px) => set({ readerSize: Math.min(READER_SIZE.max, Math.max(READER_SIZE.min, px)) }),
       showToast: (text) => set({ toast: { id: ++seq, text } }),
     }),
     {
@@ -132,7 +144,14 @@ export const useUI = create<UIState>()(
           recentRegions: Array.isArray(rest.recentRegions) ? rest.recentRegions : [],
         } as Partial<UIState>
       },
-      partialize: ({ country, region, sort, dialOpen, recentRegions }) => ({ country, region, sort, dialOpen, recentRegions }),
+      partialize: ({ country, region, sort, dialOpen, recentRegions, readerSize }) => ({
+        country,
+        region,
+        sort,
+        dialOpen,
+        recentRegions,
+        readerSize,
+      }),
     },
   ),
 )

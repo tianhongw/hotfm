@@ -6,7 +6,7 @@ import { useLibrary } from './stores/library'
 import { ShortcutsDialog } from './components/ShortcutsDialog'
 import { StationBrowser } from './components/StationBrowser'
 import { Toaster } from './components/Toaster'
-import { TranscriptPanel } from './components/TranscriptPanel'
+import { CaptionStage, TranscriptPanel } from './components/TranscriptPanel'
 import { useUI } from './stores/ui'
 import { useBootstrap } from './hooks/useBootstrap'
 import { useKeyboard } from './hooks/useKeyboard'
@@ -46,6 +46,7 @@ export function App() {
       {!apple && mobile && <PlayerSheet />}
       {apple && <ApplePlayer />}
       {!mobile && <TranscriptPanel docked={apple} />}
+      {!mobile && <CaptionStage />}
       <ShortcutsDialog />
       <Toaster />
     </div>

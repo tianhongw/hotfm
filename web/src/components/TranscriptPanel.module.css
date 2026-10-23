@@ -52,6 +52,11 @@
   letter-spacing: 0.01em;
 }
 
+.titleBtns {
+  display: flex;
+  gap: 2px;
+}
+
 .iconBtn {
   display: grid;
   place-items: center;
@@ -547,13 +552,168 @@
   cursor: default;
 }
 
+/* --- full-window captions --- */
+
+.stage {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+  animation: stageIn 0.28s var(--ease-out) both;
+}
+
+@keyframes stageIn {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
+
+.stageBar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--line);
+}
+
+.stageBar .station strong {
+  font-size: 15px;
+}
+
+.stageRec {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+  padding: 5px 10px 5px 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--red) 10%, transparent);
+  color: var(--red);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.stageRec i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: breathe 1.6s ease-in-out infinite;
+}
+
+/* A− 20 A+ stepper; the two A's differ in size, like a reader app. */
+.fontSize {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  height: 30px;
+  padding: 0 2px;
+  border-radius: 999px;
+  background: var(--panel-2);
+}
+
+.fontSize button {
+  width: 30px;
+  height: 26px;
+  border-radius: 999px;
+  font-family: var(--font-read);
+  color: var(--text-2);
+}
+
+.fontSize button:first-child {
+  font-size: 12px;
+}
+
+.fontSize button:last-child {
+  font-size: 17px;
+}
+
+.fontSize button:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--panel-3);
+}
+
+.fontSize button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.fontSize output {
+  min-width: 22px;
+  text-align: center;
+  font: 11.5px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+/* Reads like a page: one type size throughout, text only ever grows at the end. */
+.reader {
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 7vh max(24px, 5vw) 22vh;
+  mask-image: linear-gradient(to bottom, transparent, #000 48px);
+}
+
+.reader:focus-visible {
+  outline: none;
+}
+
+.page {
+  max-width: 36em;
+  margin: 0 auto;
+  font-family: var(--font-read);
+  line-height: 1.8;
+  color: var(--text);
+  hyphens: auto;
+  text-wrap: pretty;
+}
+
+.page p {
+  margin: 0 0 1.1em;
+}
+
+.readerInterim {
+  color: var(--muted);
+}
+
+.readerBreak {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 2em 0 !important;
+  font: 12px var(--font-ui);
+  color: var(--muted);
+}
+
+.readerBreak::before,
+.readerBreak::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+.readerEmpty {
+  margin-top: 20vh !important;
+  text-align: center;
+  color: var(--muted);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .panel,
-  .line {
+  .line,
+  .stage {
     animation: none;
   }
   .chip i,
   .recStrip i,
+  .stageRec i,
   .pending i {
     animation: none;
   }
