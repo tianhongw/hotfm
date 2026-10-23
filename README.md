@@ -106,9 +106,9 @@ HotFM uses a Go backend, a React + TypeScript interface, and SQLite storage. The
 make build
 ./bin/hotfm
 
-# Or build and run with Docker, keeping station data in a named volume
-docker build -t hotfm .
-docker run -p 18347:18347 -v hotfm-data:/data hotfm
+# Or build and run with Docker Compose, keeping station data in a named volume
+# and rotating container logs (3 × 10 MB)
+docker compose up -d --build
 ```
 
 Use HTTPS when hosting beyond localhost so browser features such as captions can work.

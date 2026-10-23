@@ -106,9 +106,8 @@ HotFM 使用 Go 后端、React + TypeScript 界面和 SQLite 存储。后端维�
 make build
 ./bin/hotfm
 
-# 或使用 Docker 构建运行，通过命名卷保留电台数据
-docker build -t hotfm .
-docker run -p 18347:18347 -v hotfm-data:/data hotfm
+# 或使用 Docker Compose 构建运行，通过命名卷保留电台数据，并轮转容器日志（3 × 10 MB）
+docker compose up -d --build
 ```
 
 部署到 localhost 以外的地址时，请使用 HTTPS，以便字幕等浏览器功能正常工作。

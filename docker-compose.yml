@@ -1,0 +1,21 @@
+services:
+  hotfm:
+    build: .
+    image: hotfm
+    restart: unless-stopped
+    ports:
+      - "18347:18347"
+    volumes:
+      - hotfm-data:/data
+    # Keep at most 3 × 10 MB of container logs; rotated files are gzip-compressed.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+        compress: "true"
+
+volumes:
+  hotfm-data:
+    # Same volume name as the plain `docker run -v hotfm-data:/data` setup.
+    name: hotfm-data
