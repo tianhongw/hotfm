@@ -68,7 +68,7 @@ interface UIState {
 
 let seq = 0
 
-export const READER_SIZE = { min: 14, max: 32, step: 2, initial: 20 }
+export const READER_SIZE = { min: 14, max: 32, step: 2, initial: 18 }
 
 export const useUI = create<UIState>()(
   persist(
@@ -134,10 +134,12 @@ export const useUI = create<UIState>()(
     {
       name: 'hotfm.ui',
       storage: createJSONStorage(() => window.localStorage),
-      version: 3,
+      version: 4,
       // v0 had a band filter and a name sort; both were dropped. v2 added recentRegions.
-      migrate: (old) => {
+      // v3 saved the old 20px reader default whether or not it was chosen, so it falls back to the new one.
+      migrate: (old, version) => {
         const { band: _band, tag: _tag, searchOpen: _searchOpen, ...rest } = (old ?? {}) as Record<string, unknown>
+        if (version < 4) delete rest.readerSize
         return {
           ...rest,
           sort: rest.sort === 'freq' ? 'freq' : 'popular',
