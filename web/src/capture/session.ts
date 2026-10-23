@@ -1,6 +1,7 @@
 // Live captions and recording: taps the player's Web Audio graph, feeds
 // Whisper in a worker, records with MediaRecorder, and keeps the stores in sync
 // with what is playing.
+import fixWebmDuration from 'fix-webm-duration'
 import type { Station } from '../api/types'
 import { audioContext } from '../player/audio'
 import { engine } from '../player/engine'
@@ -347,14 +348,16 @@ export async function downloadRecording() {
   if (rec.state !== 'done') return
   if (rec.withCaptions) await drain(rec.endedAt)
   const base = fileBase(rec.stationName, rec.startedAt)
+  // MediaRecorder leaves the duration out of WebM headers, so players can't show or seek it.
+  const audio = rec.ext === 'webm' ? await fixWebmDuration(rec.blob, rec.endedAt - rec.startedAt, { logger: false }) : rec.blob
   const segs = inRange(useCapture.getState().segments, rec.startedAt, rec.endedAt)
   if (segs.some((s) => s.kind === 'text')) {
     const txt = toTxt(segs, rec.stationName, rec.startedAt, rec.endedAt)
     const srt = toSrt(segs, rec.startedAt, rec.endedAt)
-    const zip = buildZip(new Uint8Array(await rec.blob.arrayBuffer()), rec.ext, txt, srt)
+    const zip = buildZip(new Uint8Array(await audio.arrayBuffer()), rec.ext, txt, srt)
     saveFile(new Blob([zip], { type: 'application/zip' }), `${base}.zip`)
   } else {
-    saveFile(rec.blob, `${base}.${rec.ext}`)
+    saveFile(audio, `${base}.${rec.ext}`)
   }
   const now = useCapture.getState().rec
   if (now.state === 'done' && now.blob === rec.blob) useCapture.getState().set({ rec: { ...now, saved: true } })
