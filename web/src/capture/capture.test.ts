@@ -176,6 +176,40 @@ describe('export', () => {
   })
 })
 
+describe('export gaps', () => {
+  const t0 = new Date(2026, 9, 23, 14, 3, 12).getTime()
+  const segs: Segment[] = [
+    { kind: 'text', id: 1, at: t0, dur: 6000, text: 'And the council voted.' },
+    { kind: 'gap', id: 2, at: t0 + 7000, dur: 5000, count: 2 },
+    { kind: 'text', id: 3, at: t0 + 13_000, dur: 4000, text: 'Officials said.' },
+    { kind: 'station', id: 4, at: t0 + 20_000, name: 'KQED 88.5' },
+    { kind: 'text', id: 5, at: t0 + 21_000, dur: 5000, text: 'Good morning.' },
+  ]
+
+  it('notes untranscribed passages in the text transcript', () => {
+    const txt = toTxt(segs, 'WNYC', t0, t0 + 30_000)
+    expect(txt).toContain('[14:03:12] And the council voted.')
+    expect(txt).toContain('[not transcribed: 2 utterances]')
+    expect(txt).toContain('— KQED 88.5 —')
+  })
+
+  it('never turns a gap into an SRT cue, so cue numbering stays contiguous', () => {
+    const srt = toSrt(segs, t0)
+    expect(srt).toBe(
+      [
+        '1\n00:00:00,000 --> 00:00:06,000\nAnd the council voted.\n',
+        '2\n00:00:13,000 --> 00:00:17,000\nOfficials said.\n',
+        '3\n00:00:21,000 --> 00:00:26,000\nGood morning.\n',
+      ].join('\n'),
+    )
+  })
+
+  it('selects a gap whose span overlaps the window', () => {
+    expect(inRange(segs, t0 + 8000, t0 + 9000).map((s) => s.id)).toEqual([2])
+    expect(inRange(segs, t0 + 11_500, t0 + 13_500).map((s) => s.id)).toEqual([2, 3])
+  })
+})
+
 describe('import', () => {
   const start = new Date(2026, 9, 23, 14, 5, 30).getTime()
   const segs: Segment[] = [

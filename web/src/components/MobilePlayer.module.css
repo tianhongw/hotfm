@@ -138,6 +138,14 @@
   padding: 4px 4px;
 }
 
+.note {
+  margin: 0 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+  text-align: center;
+}
+
 @keyframes fade {
   from {
     opacity: 0;

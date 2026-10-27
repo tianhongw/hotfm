@@ -12,11 +12,11 @@
   background: var(--panel);
 }
 
-.row[data-playing] {
+.row[data-current] {
   background: linear-gradient(90deg, color-mix(in srgb, var(--amber) 8%, transparent), transparent 70%);
 }
 
-.row[data-playing]::before {
+.row[data-current]::before {
   content: '';
   position: absolute;
   left: 0;
@@ -66,7 +66,7 @@
 }
 
 .main:hover:not(:disabled) .playOverlay,
-.row[data-playing] .playOverlay {
+.row[data-current] .playOverlay {
   opacity: 1;
 }
 
@@ -91,6 +91,24 @@
   animation-delay: -0.6s;
 }
 
+/* Connecting / buffering: a quiet ring instead of the playing equalizer. */
+.spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--amber) 30%, transparent);
+  border-top-color: var(--amber);
+  animation: spin 0.8s linear infinite;
+}
+
+.row[data-state='error'] .playOverlay {
+  color: var(--red);
+}
+
+.row[data-current][data-state='error'] .name {
+  color: var(--red);
+}
+
 .text {
   display: flex;
   flex-direction: column;
@@ -106,7 +124,7 @@
   text-overflow: ellipsis;
 }
 
-.row[data-playing] .name {
+.row[data-current] .name {
   color: var(--amber-hi);
 }
 
@@ -208,6 +226,12 @@
   }
 }
 
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (max-width: 767px) {
   .row {
     height: 60px;
@@ -231,11 +255,11 @@
   background: var(--bg);
   border-radius: 8px;
 }
-:global(:root[data-theme^='apple']) .row[data-playing] {
+:global(:root[data-theme^='apple']) .row[data-current] {
   background: var(--amber-wash);
   border-radius: 8px;
 }
-:global(:root[data-theme^='apple']) .row[data-playing]::before {
+:global(:root[data-theme^='apple']) .row[data-current]::before {
   display: none;
 }
 :global(:root[data-theme^='apple']) .freq {

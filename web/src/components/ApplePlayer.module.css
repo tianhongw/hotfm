@@ -18,6 +18,32 @@
   max-width: 1120px;
   margin: auto;
 }
+.barError {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  max-width: 1120px;
+  margin: 0 auto 10px;
+  font-size: 12px;
+  color: var(--red);
+}
+.barError span {
+  flex: 1 1 auto;
+  text-align: center;
+}
+.barError button {
+  min-height: 32px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--red) 45%, transparent);
+  color: var(--red);
+  font-size: 12px;
+}
+.barError button:hover {
+  background: color-mix(in srgb, var(--red) 10%, transparent);
+}
 .station {
   display: flex;
   align-items: center;
@@ -162,6 +188,30 @@
   font-size: 13px;
   color: var(--muted);
   margin: 7px 0 24px;
+}
+.sheetError {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  margin: -12px 0 22px;
+  color: var(--red);
+  font-size: 13px;
+  text-align: center;
+}
+.sheetActions {
+  display: flex;
+  gap: 10px;
+}
+.sheetActions button {
+  min-height: 36px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--red) 45%, transparent);
+  color: var(--red);
+  font-size: 13px;
+}
+.sheetActions button:hover {
+  background: color-mix(in srgb, var(--red) 8%, transparent);
 }
 .sheet .controls {
   gap: 28px;

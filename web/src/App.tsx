@@ -11,11 +11,13 @@ import { useUI } from './stores/ui'
 import { useBootstrap } from './hooks/useBootstrap'
 import { useKeyboard } from './hooks/useKeyboard'
 import { useIsMobile } from './hooks/useMediaQuery'
+import { useT } from './i18n'
 import s from './App.module.css'
 
 export function App() {
   useBootstrap()
   useKeyboard()
+  const t = useT()
   const mobile = useIsMobile()
   const apple = useLibrary((l) => l.theme === 'apple')
   const transcript = useUI((u) => u.transcriptOpen) && !mobile
@@ -34,11 +36,9 @@ export function App() {
         <footer className={s.footer}>
           <span className="silk">HotFM</span>
           <span>
-            Station data ©{' '}
             <a href="https://www.radio-browser.info" target="_blank" rel="noreferrer">
-              Radio Browser
-            </a>{' '}
-            community
+              {t('footer.data')}
+            </a>
           </span>
         </footer>
       </div>

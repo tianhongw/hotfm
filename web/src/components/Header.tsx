@@ -17,7 +17,7 @@ export function Header() {
         <BrandLogo />
         <div className={s.tools}>
           <AppearancePicker />
-          <button className={`${s.tool} ${s.language}`} onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')} aria-label="Language">
+          <button className={`${s.tool} ${s.language}`} onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')} aria-label={t('lang.label')}>
             {t('lang.switch')}
           </button>
           <button

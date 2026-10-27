@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useT } from '../i18n'
+import { isApplePlatform } from '../lib/platform'
 import { useLibrary } from '../stores/library'
 import { useUI } from '../stores/ui'
 import { IconClose, IconClock, IconSearch } from './Icons'
@@ -93,7 +94,7 @@ export function StationSearch() {
               <IconClose size={17} />
             </button>
           ) : (
-            <kbd className={s.searchKey}>⌘ K</kbd>
+            <kbd className={s.searchKey}>{isApplePlatform() ? '⌘ K' : 'Ctrl K'}</kbd>
           )}
         </form>
         {history && (

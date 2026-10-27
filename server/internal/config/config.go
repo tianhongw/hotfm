@@ -17,9 +17,13 @@ type Config struct {
 	Secret          []byte        // HOTFM_SECRET, signs HLS proxy URLs
 	StreamMode      string        // HOTFM_STREAM_MODE: proxy | auto
 	MaxStreamsPerIP int           // HOTFM_MAX_STREAMS_PER_IP
-	TrustProxy      bool          // HOTFM_TRUST_PROXY: honour X-Forwarded-For
-	RadioBrowserURL string        // HOTFM_RADIOBROWSER_URL: pin one mirror instead of DNS discovery
-	DevCORS         bool          // HOTFM_DEV_CORS
+	// MaxSubsPerIP caps concurrent now-playing subscriptions per client.
+	MaxSubsPerIP int // HOTFM_MAX_SUBSCRIPTIONS_PER_IP
+	// MaxMetadataWatchers caps shared metadata-only upstream connections; <=0 = unlimited.
+	MaxMetadataWatchers int    // HOTFM_MAX_METADATA_WATCHERS
+	TrustProxy          bool   // HOTFM_TRUST_PROXY: honour X-Forwarded-For
+	RadioBrowserURL     string // HOTFM_RADIOBROWSER_URL: pin one mirror instead of DNS discovery
+	DevCORS             bool   // HOTFM_DEV_CORS
 }
 
 func Load() (*Config, error) {
@@ -38,6 +42,12 @@ func Load() (*Config, error) {
 	}
 	if c.MaxStreamsPerIP, err = strconv.Atoi(env("HOTFM_MAX_STREAMS_PER_IP", "4")); err != nil {
 		return nil, fmt.Errorf("HOTFM_MAX_STREAMS_PER_IP: %w", err)
+	}
+	if c.MaxSubsPerIP, err = strconv.Atoi(env("HOTFM_MAX_SUBSCRIPTIONS_PER_IP", "4")); err != nil {
+		return nil, fmt.Errorf("HOTFM_MAX_SUBSCRIPTIONS_PER_IP: %w", err)
+	}
+	if c.MaxMetadataWatchers, err = strconv.Atoi(env("HOTFM_MAX_METADATA_WATCHERS", "64")); err != nil {
+		return nil, fmt.Errorf("HOTFM_MAX_METADATA_WATCHERS: %w", err)
 	}
 	if c.StreamMode != "proxy" && c.StreamMode != "auto" {
 		return nil, fmt.Errorf("HOTFM_STREAM_MODE must be proxy or auto, got %q", c.StreamMode)

@@ -1,10 +1,14 @@
 package api
 
 import (
+	"bytes"
 	"compress/gzip"
+	"crypto/sha256"
+	"encoding/hex"
 	"net"
 	"net/http"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -127,30 +131,198 @@ func (s *Server) rateLimited(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-type gzipWriter struct {
-	http.ResponseWriter
-	gz *gzip.Writer
-}
-
-func (g *gzipWriter) Write(b []byte) (int, error) { return g.gz.Write(b) }
-
 var gzPool = sync.Pool{New: func() any { w, _ := gzip.NewWriterLevel(nil, gzip.BestSpeed); return w }}
 
-// gzipped compresses JSON responses; never wrap streaming endpoints with it.
-func gzipped(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
-			next(w, r)
+// compressibleTypes are the static asset media types worth gzipping; fonts,
+// images and media are already compressed formats.
+var compressibleTypes = map[string]bool{
+	"text/html":                 true,
+	"text/css":                  true,
+	"text/javascript":           true,
+	"application/javascript":    true,
+	"application/json":          true,
+	"application/manifest+json": true,
+	"image/svg+xml":             true,
+	"text/plain":                true,
+}
+
+// compressibleType reports whether a Content-Type header value is worth gzipping.
+func compressibleType(ct string) bool {
+	if i := strings.IndexByte(ct, ';'); i >= 0 {
+		ct = ct[:i]
+	}
+	return compressibleTypes[strings.ToLower(strings.TrimSpace(ct))]
+}
+
+// compressWriter gzips the response only when it ends up being a 200 with a
+// compressible Content-Type, so 206/304/404 pass through byte-identical and
+// carry no stray gzip member.
+type compressWriter struct {
+	http.ResponseWriter
+	// head responses have no body; advertise the encoding but do not open a
+	// gzip member, whose empty stream would become a wrong Content-Length.
+	head    bool
+	gz      *gzip.Writer
+	decided bool
+}
+
+func (c *compressWriter) decide(code int) {
+	if c.decided {
+		return
+	}
+	c.decided = true
+	if code != http.StatusOK || !compressibleType(c.Header().Get("Content-Type")) {
+		return
+	}
+	// serveContent commits Content-Length from the uncompressed size; it is
+	// wrong once we set Content-Encoding after that.
+	c.Header().Del("Content-Length")
+	c.Header().Set("Content-Encoding", "gzip")
+	if c.head {
+		return
+	}
+	c.gz = gzPool.Get().(*gzip.Writer)
+	c.gz.Reset(c.ResponseWriter)
+}
+
+func (c *compressWriter) WriteHeader(code int) {
+	c.decide(code)
+	c.ResponseWriter.WriteHeader(code)
+}
+
+func (c *compressWriter) Write(b []byte) (int, error) {
+	c.decide(http.StatusOK)
+	if c.gz != nil {
+		return c.gz.Write(b)
+	}
+	return c.ResponseWriter.Write(b)
+}
+
+func (c *compressWriter) Unwrap() http.ResponseWriter { return c.ResponseWriter }
+
+// close flushes the gzip member; call it after the wrapped handler returns.
+func (c *compressWriter) close() {
+	if c.gz != nil {
+		_ = c.gz.Close()
+		gzPool.Put(c.gz)
+		c.gz = nil
+	}
+}
+
+// staticGzip compresses static assets (HTML/CSS/JS/SVG) based on the response
+// Content-Type. Range requests bypass compression: serveContent cannot combine
+// byte ranges with a transformed body.
+func staticGzip(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Vary", "Accept-Encoding")
+		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") || r.Header.Get("Range") != "" {
+			next.ServeHTTP(w, r)
 			return
 		}
-		gz := gzPool.Get().(*gzip.Writer)
-		gz.Reset(w)
-		defer func() {
-			gz.Close()
+		cw := &compressWriter{ResponseWriter: w, head: r.Method == http.MethodHead}
+		defer cw.close()
+		next.ServeHTTP(cw, r)
+	})
+}
+
+// bodyBuffer records a handler's status and body without touching the client,
+// so the response can be validated (ETag) before it is written.
+type bodyBuffer struct {
+	header http.Header
+	status int
+	body   bytes.Buffer
+}
+
+func (b *bodyBuffer) Header() http.Header { return b.header }
+
+func (b *bodyBuffer) WriteHeader(code int) {
+	if b.status == 0 {
+		b.status = code
+	}
+}
+
+func (b *bodyBuffer) Write(p []byte) (int, error) {
+	if b.status == 0 {
+		b.status = http.StatusOK
+	}
+	return b.body.Write(p)
+}
+
+// weakETag hashes the uncompressed body; 8 bytes keep headers short while
+// making collisions unlikely for a dataset of stations.
+func weakETag(body []byte) string {
+	sum := sha256.Sum256(body)
+	return `W/"` + hex.EncodeToString(sum[:8]) + `"`
+}
+
+// etagMatches applies the weak comparison from RFC 9110 §13.1.2: any listed
+// entity tag (with or without the W/ prefix) or "*" matches.
+func etagMatches(ifNoneMatch, etag string) bool {
+	if ifNoneMatch == "" {
+		return false
+	}
+	for _, part := range strings.Split(ifNoneMatch, ",") {
+		tag := strings.TrimSpace(part)
+		if tag == "*" || strings.TrimPrefix(tag, "W/") == strings.TrimPrefix(etag, "W/") {
+			return true
+		}
+	}
+	return false
+}
+
+// jsonResponse buffers a JSON API response to set a weak ETag on GET 200s,
+// answer revalidations with 304, and gzip the body when the client accepts it.
+// Non-GET and non-200 responses pass through unchanged (still compressed).
+// Never wrap SSE or stream endpoints with it.
+func jsonResponse(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		b := &bodyBuffer{header: w.Header()}
+		next(b, r)
+		if b.status == 0 {
+			b.status = http.StatusOK
+		}
+		body := b.body.Bytes()
+		h := w.Header()
+		// HEAD is GET without a body; it deserves the same validator.
+		isGET := r.Method == http.MethodGet || r.Method == http.MethodHead
+
+		if isGET && b.status == http.StatusOK {
+			etag := weakETag(body)
+			h.Set("ETag", etag)
+			h.Set("Cache-Control", "no-cache")
+			if etagMatches(r.Header.Get("If-None-Match"), etag) {
+				h.Del("Content-Length")
+				h.Del("Content-Encoding")
+				w.WriteHeader(http.StatusNotModified)
+				return
+			}
+		}
+
+		if b.status == http.StatusNoContent || b.status == http.StatusNotModified {
+			h.Del("Content-Length")
+			w.WriteHeader(b.status)
+			return
+		}
+		if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			h.Set("Content-Encoding", "gzip")
+			h.Add("Vary", "Accept-Encoding")
+			h.Del("Content-Length")
+			w.WriteHeader(b.status)
+			if r.Method == http.MethodHead {
+				return
+			}
+			gz := gzPool.Get().(*gzip.Writer)
+			gz.Reset(w)
+			_, _ = gz.Write(body)
+			_ = gz.Close()
 			gzPool.Put(gz)
-		}()
-		w.Header().Set("Content-Encoding", "gzip")
-		w.Header().Add("Vary", "Accept-Encoding")
-		next(&gzipWriter{ResponseWriter: w, gz: gz}, r)
+			return
+		}
+		h.Set("Content-Length", strconv.Itoa(len(body)))
+		w.WriteHeader(b.status)
+		if r.Method == http.MethodHead {
+			return
+		}
+		_, _ = w.Write(body)
 	}
 }

@@ -33,26 +33,38 @@ func TestNormalizeCN(t *testing.T) {
 }
 
 func TestNormalizeUS(t *testing.T) {
-	cases := []struct{ state, key, city string }{
-		{"California", "california", ""},
-		{"San Francisco CA", "california", "San Francisco"},
-		{"Chicago, IL  ", "illinois", "Chicago"},
-		{"New York City, New York", "new-york", "New York"},
-		{"New York NY", "new-york", "New York"},
-		{"Washington, DC", "district-of-columbia", "Washington"},
-		{"Seattle Washington", "washington", "Seattle"},
-		{"West Virginia", "west-virginia", ""},
-		{"Arkansas", "arkansas", ""},
-		{"Kansas City KS", "kansas", "Kansas City"},
-		{"California - San Francisco", "california", "San Francisco"},
-		{"Antelope, Ca", "california", "Antelope"},
-		{"", "other", ""},
-		{"Somewhere", "other", ""},
+	cases := []struct{ state, name, key, city string }{
+		{"California", "", "california", ""},
+		{"San Francisco CA", "", "california", "San Francisco"},
+		{"Chicago, IL  ", "", "illinois", "Chicago"},
+		{"New York City, New York", "", "new-york", "New York"},
+		{"New York NY", "", "new-york", "New York"},
+		{"Washington, DC", "", "district-of-columbia", "Washington"},
+		{"Seattle Washington", "", "washington", "Seattle"},
+		{"West Virginia", "", "west-virginia", ""},
+		{"Arkansas", "", "arkansas", ""},
+		{"Kansas City KS", "", "kansas", "Kansas City"},
+		{"California - San Francisco", "", "california", "San Francisco"},
+		{"Antelope, Ca", "", "california", "Antelope"},
+		{"", "", "other", ""},
+		{"Somewhere", "", "other", ""},
+		// No usable state field: the station name is consulted.
+		{"", "KOST 103.5FM Los Angeles, CA", "california", ""},
+		{"", "Magic 80s Florida", "florida", ""},
+		{"", "Amherst, MA", "massachusetts", ""},
+		{"", "Radio West Virginia", "west-virginia", ""},
+		{"", "Washington DC", "district-of-columbia", "Washington"},
+		// "LA" is a market, not Louisiana, after a callsign.
+		{"", "KFI LA", "other", ""},
+		// A city is not a state; there is no city table.
+		{"", "KEXP 90.3 FM Seattle", "other", ""},
+		// The state field always wins over the name.
+		{"Austin TX", "KEXP", "texas", "Austin"},
 	}
 	for _, c := range cases {
-		r, city := NormalizeUS(c.state)
+		r, city := NormalizeUS(c.state, c.name)
 		if r.Key != c.key || city != c.city {
-			t.Errorf("NormalizeUS(%q) = %q, %q; want %q, %q", c.state, r.Key, city, c.key, c.city)
+			t.Errorf("NormalizeUS(%q, %q) = %q, %q; want %q, %q", c.state, c.name, r.Key, city, c.key, c.city)
 		}
 	}
 }

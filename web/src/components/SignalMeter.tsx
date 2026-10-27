@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { useT } from '../i18n'
 import { meterCapable } from '../player/audio'
 import { engine } from '../player/engine'
 import { nearestSlot, noiseLevel } from '../lib/dial'
@@ -15,6 +16,7 @@ const LEVEL_SEGS = 16
  * the Web Audio analyser, shown only where the analyser is available.
  */
 export function SignalMeter() {
+  const t = useT()
   const sig = useRef<HTMLSpanElement[]>([])
   const lvl = useRef<HTMLSpanElement[]>([])
 
@@ -63,7 +65,7 @@ export function SignalMeter() {
   return (
     <div className={s.meter} aria-hidden>
       <div className={s.row}>
-        <span className="silk">Signal</span>
+        <span className="silk">{t('silk.signal')}</span>
         <span className={s.segs}>
           {Array.from({ length: SIGNAL_SEGS }, (_, i) => (
             <span key={i} ref={(el) => void (el && (sig.current[i] = el))} className={s.seg} data-hot={i >= SIGNAL_SEGS - 2 || undefined} />
@@ -72,7 +74,7 @@ export function SignalMeter() {
       </div>
       {meterCapable && (
         <div className={s.row}>
-          <span className="silk">Level</span>
+          <span className="silk">{t('silk.level')}</span>
           <span className={s.segs}>
             {Array.from({ length: LEVEL_SEGS }, (_, i) => (
               <span

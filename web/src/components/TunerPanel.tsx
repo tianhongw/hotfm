@@ -16,7 +16,7 @@ export function TunerPanel({ compact = false }: { compact?: boolean }) {
   return (
     <div className={s.panel} data-compact={compact || undefined}>
       <div className={s.head}>
-        {!compact && <span className="silk">Tuning</span>}
+        {!compact && <span className="silk">{t('silk.tuning')}</span>}
         <div className={s.meter}>
           <SignalMeter />
         </div>

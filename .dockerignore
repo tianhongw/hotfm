@@ -1,5 +1,6 @@
 **/node_modules
 web/dist
+server/internal/webui/dist
 data
 bin
 .git

@@ -192,7 +192,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Fetch stations by id (used to refresh locally stored favourites; includes offline ones) */
+        /**
+         * Fetch stations by id (used to refresh locally stored favourites; includes offline ones)
+         * @description Ids absorbed by a duplicate merge resolve to the surviving station, which carries the requested id in `aliasOf`; ids that resolve to nothing are dropped.
+         */
         post: {
             parameters: {
                 query?: never;
@@ -234,7 +237,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** One station (offline stations are returned with offline=true) */
+        /**
+         * One station (offline stations are returned with offline=true)
+         * @description An id absorbed by a duplicate merge resolves to the surviving station, which carries the requested id in `aliasOf`.
+         */
         get: {
             parameters: {
                 query?: never;
@@ -475,6 +481,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/stations/{id}/nowplaying": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Server-Sent Events with "now playing" titles shared by all listeners of a station
+         * @description Emits `event: title` with data `{"title": "..."}`, `retry: 5000`, and a `: ping` heartbeat every 25s. The server reads ICY metadata from a single upstream connection while at least one client is subscribed; stations without `icy-metaint` yield no events.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["id"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Event stream */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/event-stream": unknown;
+                    };
+                };
+                404: components["responses"]["Error"];
+                409: components["responses"]["Error"];
+                429: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/hls/{id}": {
         parameters: {
             query?: never;
@@ -562,6 +612,8 @@ export interface components {
         Country: {
             code: components["schemas"]["CountryCode"];
             count: number;
+            /** @description A sync run is currently in flight for this country */
+            syncing: boolean;
             /** Format: date-time */
             syncedAt: string | null;
         };
@@ -606,6 +658,8 @@ export interface components {
             /** @description Removed upstream or failed health checks */
             offline: boolean;
             votes: number;
+            /** @description Set when the requested id was absorbed by a duplicate merge; holds the id that was requested */
+            aliasOf?: string;
         };
         DialStation: {
             id: string;

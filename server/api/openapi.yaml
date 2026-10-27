@@ -89,6 +89,7 @@ paths:
   /stations/batch:
     post:
       summary: Fetch stations by id (used to refresh locally stored favourites; includes offline ones)
+      description: Ids absorbed by a duplicate merge resolve to the surviving station, which carries the requested id in `aliasOf`; ids that resolve to nothing are dropped.
       requestBody:
         required: true
         content:
@@ -111,6 +112,7 @@ paths:
   /stations/{id}:
     get:
       summary: One station (offline stations are returned with offline=true)
+      description: An id absorbed by a duplicate merge resolves to the surviving station, which carries the requested id in `aliasOf`.
       parameters: [{ $ref: "#/components/parameters/id" }]
       responses:
         "200":
@@ -177,6 +179,18 @@ paths:
         "200":
           description: Event stream
           content: { text/event-stream: {} }
+  /stations/{id}/nowplaying:
+    get:
+      summary: Server-Sent Events with "now playing" titles shared by all listeners of a station
+      description: 'Emits `event: title` with data `{"title": "..."}`, `retry: 5000`, and a `: ping` heartbeat every 25s. The server reads ICY metadata from a single upstream connection while at least one client is subscribed; stations without `icy-metaint` yield no events.'
+      parameters: [{ $ref: "#/components/parameters/id" }]
+      responses:
+        "200":
+          description: Event stream
+          content: { text/event-stream: {} }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
   /hls/{id}:
     get:
       summary: Proxied HLS root playlist; nested URIs are rewritten to signed /hls/{id}/r URLs
@@ -212,10 +226,11 @@ components:
     Health: { type: string, enum: [unknown, ok, flaky, dead] }
     Country:
       type: object
-      required: [code, count, syncedAt]
+      required: [code, count, syncing, syncedAt]
       properties:
         code: { $ref: "#/components/schemas/CountryCode" }
         count: { type: integer }
+        syncing: { type: boolean, description: "A sync run is currently in flight for this country" }
         syncedAt: { type: string, format: date-time, nullable: true }
     Region:
       type: object
@@ -261,6 +276,9 @@ components:
         health: { $ref: "#/components/schemas/Health" }
         offline: { type: boolean, description: "Removed upstream or failed health checks" }
         votes: { type: integer }
+        aliasOf:
+          type: string
+          description: "Set when the requested id was absorbed by a duplicate merge; holds the id that was requested"
     DialStation:
       type: object
       required: [id, name, city, health]

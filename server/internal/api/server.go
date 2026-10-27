@@ -35,6 +35,12 @@ type Server struct {
 	rb      *radiobrowser.Client
 	log     *slog.Logger
 	limiter *ipLimiter
+	sync    SyncStatus
+
+	// nowPlaying shares one metadata-only upstream connection per station;
+	// subLimit caps concurrent now-playing subscriptions per client.
+	nowPlaying *stream.NowPlaying
+	subLimit   *stream.IPLimiter
 
 	// once-per-window dedupe for click forwarding and failure reports
 	dedupeMu sync.Mutex
@@ -42,29 +48,38 @@ type Server struct {
 }
 
 type Deps struct {
-	Config  *config.Config
-	Store   *store.Store
-	Proxy   *stream.Proxy
-	Hub     *stream.Hub
-	Logos   *logo.Cache
-	Checker *health.Checker
-	Radio   *radiobrowser.Client
-	Log     *slog.Logger
+	Config     *config.Config
+	Store      *store.Store
+	Proxy      *stream.Proxy
+	Hub        *stream.Hub
+	Logos      *logo.Cache
+	Checker    *health.Checker
+	Radio      *radiobrowser.Client
+	Sync       SyncStatus
+	NowPlaying *stream.NowPlaying
+	Log        *slog.Logger
+}
+
+// SyncStatus reports whether a catalog sync is running for a country.
+type SyncStatus interface {
+	Syncing(country string) bool
 }
 
 func New(d Deps) *Server {
 	return &Server{
 		cfg: d.Config, store: d.Store, proxy: d.Proxy, hub: d.Hub, logos: d.Logos,
-		checker: d.Checker, rb: d.Radio, log: d.Log,
-		limiter: newIPLimiter(20, 60),
-		dedupe:  map[string]time.Time{},
+		checker: d.Checker, rb: d.Radio, log: d.Log, sync: d.Sync,
+		nowPlaying: d.NowPlaying,
+		subLimit:   &stream.IPLimiter{Max: d.Config.MaxSubsPerIP},
+		limiter:    newIPLimiter(20, 60),
+		dedupe:     map[string]time.Time{},
 	}
 }
 
 // Handler mounts the API; web is served for every other path (SPA).
 func (s *Server) Handler(web http.Handler) http.Handler {
 	mux := http.NewServeMux()
-	j := func(h http.HandlerFunc) http.HandlerFunc { return s.rateLimited(gzipped(h)) }
+	j := func(h http.HandlerFunc) http.HandlerFunc { return s.rateLimited(jsonResponse(h)) }
 
 	mux.HandleFunc("GET /api/v1/countries", j(s.handleCountries))
 	mux.HandleFunc("GET /api/v1/regions", j(s.handleRegions))
@@ -77,6 +92,7 @@ func (s *Server) Handler(web http.Handler) http.Handler {
 	mux.HandleFunc("GET /api/v1/dial", j(s.handleDial))
 	mux.HandleFunc("GET /api/v1/stream/{id}", s.rateLimited(s.handleStream))
 	mux.HandleFunc("GET /api/v1/stream/{id}/meta", s.rateLimited(s.handleMeta))
+	mux.HandleFunc("GET /api/v1/stations/{id}/nowplaying", s.rateLimited(s.handleNowPlaying))
 	mux.HandleFunc("GET /api/v1/hls/{id}", s.rateLimited(s.handleHLS))
 	mux.HandleFunc("GET /api/v1/hls/{id}/r", s.handleHLSResource) // segments; token-gated
 	mux.HandleFunc("GET /api/v1/logo/{id}", s.handleLogo)
@@ -85,7 +101,7 @@ func (s *Server) Handler(web http.Handler) http.Handler {
 		writeError(w, http.StatusNotFound, "not_found", "unknown endpoint")
 	})
 	if web != nil {
-		mux.Handle("/", web)
+		mux.Handle("/", staticGzip(web))
 	}
 	return s.withBase(mux)
 }
@@ -168,11 +184,12 @@ func (s *Server) handleCountries(w http.ResponseWriter, r *http.Request) {
 	type countryDTO struct {
 		Code     string     `json:"code"`
 		Count    int        `json:"count"`
+		Syncing  bool       `json:"syncing"`
 		SyncedAt *time.Time `json:"syncedAt"`
 	}
 	out := []countryDTO{}
 	for _, c := range catalog.Countries {
-		d := countryDTO{Code: c, Count: byCode[c]}
+		d := countryDTO{Code: c, Count: byCode[c], Syncing: s.sync != nil && s.sync.Syncing(c)}
 		if t, err := s.store.LastSuccessfulSync(r.Context(), c); err == nil && !t.IsZero() {
 			d.SyncedAt = &t
 		}
@@ -394,13 +411,59 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	s.writeStreamErr(w, err)
 }
 
-// handleMeta streams "now playing" titles as Server-Sent Events.
+// handleMeta streams "now playing" titles as Server-Sent Events. Titles are
+// session-scoped because they come from the client's own proxied audio stream.
 func (s *Server) handleMeta(w http.ResponseWriter, r *http.Request) {
 	sid := s.sid(r)
 	if sid == "" {
 		writeError(w, http.StatusBadRequest, "bad_sid", "sid must be 8-64 url-safe characters")
 		return
 	}
+	ch, current, cancel := s.hub.Subscribe(sid)
+	defer cancel()
+	sseTitles(w, r, ch, current)
+}
+
+// handleNowPlaying streams station-wide "now playing" titles as Server-Sent
+// Events. Direct (non-proxied) audio never passes through us, so the server
+// keeps one metadata-only upstream connection per station instead.
+func (s *Server) handleNowPlaying(w http.ResponseWriter, r *http.Request) {
+	st, ok := s.station(w, r)
+	if !ok {
+		return
+	}
+	if st.HLS {
+		writeError(w, http.StatusConflict, "is_hls", "station is HLS; titles come from the stream")
+		return
+	}
+	if s.nowPlaying == nil || s.subLimit == nil {
+		s.internal(w, errors.New("now-playing watcher not configured"))
+		return
+	}
+	unsub, ok := s.subLimit.Acquire(s.clientIP(r))
+	if !ok {
+		w.Header().Set("Retry-After", "30")
+		writeError(w, http.StatusTooManyRequests, "too_many_subscriptions", "concurrent subscription limit reached")
+		return
+	}
+	defer unsub()
+	ch, current, release, err := s.nowPlaying.Subscribe(st)
+	if err != nil {
+		if errors.Is(err, stream.ErrNoCapacity) {
+			w.Header().Set("Retry-After", "30")
+			writeError(w, http.StatusTooManyRequests, "watcher_limit", "now-playing watcher capacity reached")
+			return
+		}
+		s.internal(w, err)
+		return
+	}
+	defer release()
+	sseTitles(w, r, ch, current)
+}
+
+// sseTitles writes the shared SSE frame format: an initial retry hint, the
+// latest title (when known), title events and a heartbeat comment.
+func sseTitles(w http.ResponseWriter, r *http.Request, ch <-chan string, current string) {
 	h := w.Header()
 	h.Set("Content-Type", "text/event-stream")
 	h.Set("Cache-Control", "no-store")
@@ -409,8 +472,6 @@ func (s *Server) handleMeta(w http.ResponseWriter, r *http.Request) {
 	rc := http.NewResponseController(w)
 	_ = rc.SetWriteDeadline(time.Time{})
 
-	ch, current, cancel := s.hub.Subscribe(sid)
-	defer cancel()
 	send := func(title string) bool {
 		b, _ := json.Marshal(map[string]string{"title": title})
 		if _, err := fmt.Fprintf(w, "event: title\ndata: %s\n\n", b); err != nil {
@@ -476,7 +537,11 @@ func (s *Server) handleLogo(w http.ResponseWriter, r *http.Request) {
 	}
 	img, err := s.logos.Get(r.Context(), st.ID, st.Favicon)
 	if err != nil {
-		w.Header().Set("Cache-Control", "public, max-age=86400")
+		maxAge := 86400 // definitive miss: the station has no usable logo
+		if errors.Is(err, logo.ErrTransient) {
+			maxAge = 300 // retryable upstream failure: let browsers retry soon
+		}
+		w.Header().Set("Cache-Control", "public, max-age="+strconv.Itoa(maxAge))
 		writeError(w, http.StatusNotFound, "no_logo", "no logo")
 		return
 	}

@@ -241,6 +241,17 @@
   color: var(--muted);
 }
 
+.loadRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.loadRow small:first-child {
+  flex: 1;
+}
+
 /* --- transcript --- */
 
 .logWrap {

@@ -133,7 +133,7 @@ function LocationPanel({ onDone, mobile = false }: { onDone: () => void; mobile?
 
   return (
     <div className={s.panel} data-mobile={mobile || undefined}>
-      <div className={s.tabs} role="tablist" aria-label="Country">
+      <div className={s.tabs} role="tablist" aria-label={t('location.country')}>
         {COUNTRIES.map((c) => {
           const n = counts.data?.find((x) => x.code === c)?.count
           return (

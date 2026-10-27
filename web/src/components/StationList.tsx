@@ -4,7 +4,7 @@ import type { Station } from '../api/types'
 import { useT } from '../i18n'
 import { useLibrary } from '../stores/library'
 import { usePlayer } from '../stores/player'
-import { StationRow } from './StationRow'
+import { StationRow, type RowState } from './StationRow'
 import s from './StationList.module.css'
 
 interface Props {
@@ -20,6 +20,7 @@ interface Props {
 export function StationList({ stations, hasMore, loadingMore, onLoadMore, onRemove, empty }: Props) {
   const t = useT()
   const playingId = usePlayer((p) => p.station?.id)
+  const status = usePlayer((p) => p.status)
   const favorites = useLibrary((l) => l.favorites)
   const favIds = new Set(favorites.map((f) => f.id))
   const parent = useRef<HTMLDivElement>(null)
@@ -55,6 +56,18 @@ export function StationList({ stations, hasMore, loadingMore, onLoadMore, onRemo
     <div ref={parent} className={s.list} style={{ height: virtualizer.getTotalSize() }} role="list">
       {items.map((it) => {
         const st = stations[it.index]!
+        // Highlight follows the loaded station in every non-idle state; the
+        // equalizer only animates once audio is actually playing.
+        const current = st.id === playingId && status !== 'idle'
+        const state: RowState | undefined = !current
+          ? undefined
+          : status === 'playing'
+            ? 'playing'
+            : status === 'error'
+              ? 'error'
+              : status === 'connecting' || status === 'buffering'
+                ? 'loading'
+                : undefined
         return (
           <div
             key={st.id}
@@ -64,7 +77,8 @@ export function StationList({ stations, hasMore, loadingMore, onLoadMore, onRemo
           >
             <StationRow
               station={st}
-              playing={st.id === playingId}
+              current={current}
+              state={state}
               favorite={favIds.has(st.id)}
               onRemove={onRemove ? () => onRemove(st.id) : undefined}
             />

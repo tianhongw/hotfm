@@ -1,3 +1,4 @@
+import { useT } from '../i18n'
 import { Transport } from './Transport'
 import { TunerPanel } from './TunerPanel'
 import { VfdDisplay } from './VfdDisplay'
@@ -6,8 +7,9 @@ import s from './Faceplate.module.css'
 
 /** The receiver front panel: display window, controls and the (collapsible) tuning dial. */
 export function Faceplate() {
+  const t = useT()
   return (
-    <section className={s.plate} aria-label="Tuner">
+    <section className={s.plate} aria-label={t('display.tuner')}>
       <div className={s.screws} aria-hidden>
         <i />
         <i />
@@ -20,7 +22,7 @@ export function Faceplate() {
           <Transport />
           <div className={s.knobBlock}>
             <VolumeKnob />
-            <span className="silk">Volume</span>
+            <span className="silk">{t('silk.volume')}</span>
           </div>
         </div>
       </div>

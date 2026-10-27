@@ -30,8 +30,15 @@ interface LibraryState {
 
   toggleFavorite: (st: Station) => boolean
   removeFavorite: (id: string) => void
+  /** Put a station back where it was (Undo after a removal); ignored when already saved. */
+  insertFavorite: (st: Station, index: number) => void
   pushRecent: (st: Station) => void
   removeRecent: (id: string) => void
+  /** Put a station back at its previous position in Recent. */
+  insertRecent: (st: Station, index: number) => void
+  clearRecent: () => void
+  /** Restore a whole recent list (Undo after clearing). */
+  restoreRecent: (list: Station[]) => void
   setVolume: (v: number) => void
   setMuted: (m: boolean) => void
   setNoise: (n: boolean) => void
@@ -71,8 +78,24 @@ export const useLibrary = create<LibraryState>()(
         return !exists
       },
       removeFavorite: (id) => set({ favorites: get().favorites.filter((f) => f.id !== id) }),
+      insertFavorite: (st, index) =>
+        set((s) => {
+          if (s.favorites.some((f) => f.id === st.id)) return s
+          const favorites = [...s.favorites]
+          favorites.splice(Math.min(Math.max(0, index), favorites.length), 0, st)
+          return { favorites }
+        }),
       pushRecent: (st) => set({ recent: [st, ...get().recent.filter((r) => r.id !== st.id)].slice(0, RECENT_MAX) }),
       removeRecent: (id) => set({ recent: get().recent.filter((r) => r.id !== id) }),
+      insertRecent: (st, index) =>
+        set((s) => {
+          const rest = s.recent.filter((r) => r.id !== st.id)
+          const recent = [...rest]
+          recent.splice(Math.min(Math.max(0, index), recent.length), 0, st)
+          return { recent: recent.slice(0, RECENT_MAX) }
+        }),
+      clearRecent: () => set({ recent: [] }),
+      restoreRecent: (list) => set({ recent: list.slice(0, RECENT_MAX) }),
       setVolume: (v) => set({ volume: Math.min(1, Math.max(0, v)), muted: false }),
       setMuted: (muted) => set({ muted }),
       setNoise: (noise) => set({ noise }),
@@ -91,11 +114,22 @@ export const useLibrary = create<LibraryState>()(
       dismissRegionTip: () => set({ regionTipDismissed: true }),
       refresh: (fresh, requested) => {
         const byId = new Map(fresh.map((s) => [s.id, s]))
+        // A merge absorbs duplicate ids into one surviving station; those answer
+        // with aliasOf so stored entries can be re-pointed at the survivor.
+        const byAlias = new Map(fresh.flatMap((s) => (s.aliasOf ? [[s.aliasOf, s] as const] : [])))
         const asked = new Set(requested)
-        const swap = (st: Station) => byId.get(st.id) ?? (asked.has(st.id) ? markOffline(st) : st)
+        const swap = (st: Station) =>
+          byId.get(st.id) ?? byAlias.get(st.id) ?? (asked.has(st.id) ? markOffline(st) : st)
+        const dedupe = (list: Station[]) => {
+          const seen = new Set<string>()
+          return list.filter((s) => !seen.has(s.id) && (seen.add(s.id), true))
+        }
+        const last = get().lastStationId
+        const lastHit = last ? (byId.get(last) ?? byAlias.get(last)) : undefined
         set({
-          favorites: get().favorites.map(swap),
-          recent: get().recent.map(swap),
+          favorites: dedupe(get().favorites.map(swap)),
+          recent: dedupe(get().recent.map(swap)).slice(0, RECENT_MAX),
+          lastStationId: lastHit ? lastHit.id : last,
         })
       },
     }),

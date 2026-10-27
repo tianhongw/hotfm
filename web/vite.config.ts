@@ -19,7 +19,8 @@ export default defineConfig({
   optimizeDeps: { exclude: ['@huggingface/transformers'] },
   build: {
     target: 'es2020',
-    sourcemap: true,
+    // Keep dev sourcemaps (served by Vite) but never ship them in the binary.
+    sourcemap: false,
     // hls.js is a lazily loaded chunk of ~600 kB; the main bundle stays small.
     chunkSizeWarningLimit: 700,
   },

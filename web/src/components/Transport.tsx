@@ -21,14 +21,14 @@ export function Transport({ compact = false }: { compact?: boolean }) {
   const setDialOpen = useUI((u) => u.setDialOpen)
   const [sleepOpen, setSleepOpen] = useState(false)
 
-  const active = status === 'playing' || status === 'connecting' || status === 'buffering'
+  const active = status === 'playing' || status === 'connecting' || status === 'buffering' || status === 'offline'
 
   return (
     <div className={s.transport} data-compact={compact || undefined}>
       <div className={s.main}>
         <button className={s.key} onClick={() => seek(-1)} aria-label={t('transport.seekPrev')} title={`${t('transport.seekPrev')} (Shift+←)`}>
           <IconSeekPrev size={18} />
-          <span className="silk">Seek</span>
+          <span className="silk">{t('silk.seek')}</span>
         </button>
         <button
           className={s.power}
@@ -41,7 +41,7 @@ export function Transport({ compact = false }: { compact?: boolean }) {
         </button>
         <button className={s.key} onClick={() => seek(1)} aria-label={t('transport.seekNext')} title={`${t('transport.seekNext')} (Shift+→)`}>
           <IconSeekNext size={18} />
-          <span className="silk">Seek</span>
+          <span className="silk">{t('silk.seek')}</span>
         </button>
       </div>
       <div className={s.aux}>

@@ -26,6 +26,9 @@ let asr: Promise<AutomaticSpeechRecognitionPipeline> | null = null
 function load(): Promise<AutomaticSpeechRecognitionPipeline> {
   return (asr ??= (async () => {
     const webgpu = await hasWebGPU()
+    const backend = webgpu ? 'webgpu' : 'wasm'
+    // Known before the download starts, so the panel can say which model and how big it is.
+    post({ type: 'progress', progress: 0, loaded: 0, total: 0, backend })
     const p = await pipeline(
       'automatic-speech-recognition',
       webgpu ? 'onnx-community/whisper-base.en' : 'onnx-community/whisper-tiny.en',
@@ -33,11 +36,14 @@ function load(): Promise<AutomaticSpeechRecognitionPipeline> {
         device: webgpu ? 'webgpu' : 'wasm',
         dtype: webgpu ? { encoder_model: 'fp32', decoder_model_merged: 'q4' } : 'q8',
         progress_callback: (info) => {
-          if (info.status === 'progress_total') post({ type: 'progress', progress: info.progress })
+          // Aggregate bytes across files; per-file events would jump backwards.
+          if (info.status === 'progress_total') {
+            post({ type: 'progress', progress: info.progress, loaded: info.loaded, total: info.total, backend })
+          }
         },
       },
     )
-    post({ type: 'ready', backend: webgpu ? 'webgpu' : 'wasm' })
+    post({ type: 'ready', backend })
     return p
   })().catch((err: unknown) => {
     asr = null

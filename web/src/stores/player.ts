@@ -1,7 +1,20 @@
 import { create } from 'zustand'
 import type { Station } from '../api/types'
+import type { TKey } from '../i18n'
 
-export type PlayerStatus = 'idle' | 'connecting' | 'buffering' | 'playing' | 'paused' | 'error'
+export type PlayerStatus = 'idle' | 'connecting' | 'buffering' | 'playing' | 'paused' | 'error' | 'offline'
+
+/** The one place a failure code becomes user-facing copy, so every appearance agrees. */
+export function failureKey(code: string | null | undefined): TKey {
+  switch (code) {
+    case 'too_many_streams':
+      return 'error.tooManyStreams'
+    case 'rate_limited':
+      return 'error.rateLimited'
+    default:
+      return 'error.generic'
+  }
+}
 
 interface PlayerState {
   station: Station | null

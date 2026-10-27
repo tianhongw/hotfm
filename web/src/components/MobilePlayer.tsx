@@ -18,7 +18,7 @@ export function MiniPlayer() {
   const t = useT()
   const { station, status, title } = usePlayer()
   const setSheet = useUI((u) => u.setSheetOpen)
-  const active = status === 'playing' || status === 'connecting' || status === 'buffering'
+  const active = status === 'playing' || status === 'connecting' || status === 'buffering' || status === 'offline'
   return (
     <div className={s.mini}>
       <button className={s.miniMain} onClick={() => setSheet(true)} aria-label={t('mini.expand')}>
@@ -26,7 +26,7 @@ export function MiniPlayer() {
         <span className={s.miniText}>
           <span className={s.miniName}>{station?.name ?? t('display.noStation')}</span>
           <span className={s.miniSub}>
-            {station && <span className={s.miniFreq}>{station.freq != null ? `${formatFreq(station.freq)} MHz` : 'NET'}</span>}
+            {station && <span className={s.miniFreq}>{station.freq != null ? `${formatFreq(station.freq)} MHz` : t('list.net')}</span>}
             {status === 'playing' && title ? title : status !== 'idle' && status !== 'playing' ? t(`status.${status}`) : ''}
           </span>
         </span>
@@ -55,7 +55,7 @@ export function PlayerSheet() {
   if (!open) return null
   return createPortal(
     <div className={s.backdrop}>
-      <div ref={sheet} className={s.sheet} role="dialog" aria-modal="true" aria-label="Player">
+      <div ref={sheet} className={s.sheet} role="dialog" aria-modal="true" aria-label={t('player.sheet')}>
         <div
           className={s.handle}
           onPointerDown={(e) => {
@@ -97,6 +97,7 @@ export function PlayerSheet() {
           <Transport compact />
           <VolumeKnob size={64} />
         </div>
+        <p className={s.note}>{t('capture.mobileNote')}</p>
       </div>
     </div>,
     document.body,

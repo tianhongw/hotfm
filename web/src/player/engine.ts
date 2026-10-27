@@ -3,12 +3,15 @@ import type { Station } from '../api/types'
 import type { PlayerStatus } from '../stores/player'
 import { api } from '../api/client'
 import { audioContext, meterCapable } from './audio'
+import { classifyFailure, probeStreamFailure, type FailureKind } from './failure'
+import { nextTitle, parseId3Title } from './titles'
 
 export type EngineEvent =
   | { type: 'status'; status: PlayerStatus }
   | { type: 'title'; title: string }
   | { type: 'started' } // audio actually started for the current load
   | { type: 'failed'; code: string } // gave up after retries
+  | { type: 'handover'; state: 'done' | 'failed'; stationId: string } // moved a live stream onto the proxy, or could not
 
 type Listener = (e: EngineEvent) => void
 
@@ -19,6 +22,10 @@ const loadHls = () => (hlsModule ??= import('hls.js').then((m) => m.default))
 const MAX_RETRIES = 2
 const STALL_MS = 15_000
 const STABLE_MS = 30_000
+/** How long the proxied stream may take to start before the handover is abandoned. */
+const HANDOVER_MS = 6000
+const HANDOVER_FADE_MS = 300
+const HANDOVER_FADE_STEPS = 10
 
 function randomId(): string {
   const a = new Uint8Array(12)
@@ -40,6 +47,8 @@ export class PlayerEngine {
   private el = this.proxiedEl
   private hls: Hls | null = null
   private meta: EventSource | null = null
+  /** Last title emitted for the current load; SSE and ID3 both dedupe against it. */
+  private lastTitle = ''
   private analyser: AnalyserNode | null = null
   /** proxiedEl's node in the Web Audio graph; captions and recording tap it before volume. */
   private source: MediaElementAudioSourceNode | null = null
@@ -61,16 +70,35 @@ export class PlayerEngine {
   private fade = 1
   /** Bumped on every teardown so async work from an older load can tell it is stale. */
   private generation = 0
+  /** Last status handed to the UI; reconnects key off it. */
+  private status: PlayerStatus = 'idle'
+  /** True while the network is down; failures then wait instead of burning retries. */
+  private offline = false
   /** Elements we paused ourselves; their async 'pause' event must not count as an external pause. */
   private selfPaused = new WeakSet<HTMLAudioElement>()
+  /** The proxied element warming up for a handover, and the session it was opened for. */
+  private pending: { el: HTMLAudioElement; sid: string; id: number; timer: number } | null = null
+  private handoverId = 0
+  private handoverTimer: number | undefined
+  /** 0..1 level factors for the two elements during warm-up and crossfade. */
+  private proxyFade = 1
+  private directFade = 1
+  /** Station whose warm-up failed; canTap stays false for it until the next start. */
+  private handoverFailedFor: string | null = null
 
   constructor() {
     for (const el of [this.proxiedEl, this.directEl]) {
       el.preload = 'none'
-      el.addEventListener('playing', () => el === this.el && this.onPlaying())
+      el.addEventListener('playing', () => {
+        if (el === this.el) this.onPlaying()
+        else if (el === this.pending?.el) this.handoverReady()
+      })
       el.addEventListener('waiting', () => el === this.el && this.onWaiting())
       el.addEventListener('stalled', () => el === this.el && this.onWaiting())
-      el.addEventListener('error', () => el === this.el && this.wantPlaying && !this.hls && this.fail('media_error'))
+      el.addEventListener('error', () => {
+        if (el === this.pending?.el) this.abortHandover('error')
+        else if (el === this.el && this.wantPlaying && !this.hls) this.fail('media_error')
+      })
       el.addEventListener('ended', () => el === this.el && this.wantPlaying && this.fail('ended'))
       el.addEventListener('pause', () => {
         if (this.selfPaused.has(el)) {
@@ -80,11 +108,14 @@ export class PlayerEngine {
         // Paused by the OS / headset rather than by us.
         if (el === this.el && this.wantPlaying && !el.ended && el.error == null) {
           this.wantPlaying = false
-          this.emit({ type: 'status', status: 'paused' })
+          this.setStatus('paused')
         }
       })
     }
     this.proxiedEl.crossOrigin = 'anonymous'
+    // Losing the network is not a station failure: hold the load and wait.
+    window.addEventListener('offline', this.onOffline)
+    window.addEventListener('online', this.onOnline)
   }
 
   on(fn: Listener): () => void {
@@ -94,6 +125,28 @@ export class PlayerEngine {
 
   private emit(e: EngineEvent) {
     for (const fn of this.listeners) fn(e)
+  }
+
+  private setStatus(status: PlayerStatus) {
+    this.status = status
+    this.emit({ type: 'status', status })
+  }
+
+  /** The OS went offline: stop retrying and wait for the network to come back. */
+  private onOffline = () => {
+    this.offline = true
+    if (!this.wantPlaying) return
+    window.clearTimeout(this.retryTimer)
+    this.retryTimer = undefined
+    if (this.status !== 'offline') this.setStatus('offline')
+  }
+
+  /** Back online after an offline pause: start over with a clean retry budget. */
+  private onOnline = () => {
+    this.offline = false
+    if (!this.wantPlaying || this.status !== 'offline') return
+    this.retries = 0
+    this.start()
   }
 
   get current(): Station | null {
@@ -150,21 +203,34 @@ export class PlayerEngine {
 
   /** Whether a station can be routed through the graph (proxied, or with a proxy fallback). */
   canTap(st: Station): boolean {
-    return this.capable && (st.stream.proxied || !!st.stream.proxy)
+    return this.capable && (st.stream.proxied || !!st.stream.proxy) && this.handoverFailedFor !== st.id
   }
 
   /**
-   * Captions and recording need the proxy. Turning it on moves a playing direct
-   * station over at once; turning it off waits for the next start so playback
-   * is not interrupted.
+   * Captions and recording need the proxy. Turning it on warms the proxied
+   * stream up beside a playing direct station and switches once it plays;
+   * turning it off waits for the next start so playback is not interrupted.
    */
   setPreferProxy(v: boolean) {
     if (this.preferProxy === v) return
     this.preferProxy = v
     const st = this.station
-    if (!st || !v) return
+    if (!v) {
+      this.abortHandover('preference')
+      return
+    }
+    if (!st) return
     const el = this.route(st).el
     if (el === this.el) return
+    if (this.wantPlaying && this.el === this.directEl && st.stream.type !== 'hls' && st.stream.proxy) {
+      // The load in flight has not picked its element yet: it will route to the proxy by itself.
+      if (this.status === 'connecting') return
+      if (this.status === 'playing' || this.status === 'buffering') {
+        this.startHandover(st)
+        return
+      }
+    }
+    // HLS and paused/starting loads have nothing to lose: switch outright.
     const playing = this.wantPlaying
     this.teardown()
     this.el = el
@@ -180,14 +246,111 @@ export class PlayerEngine {
     return { el: this.directEl, url: st.stream.url, proxied: false }
   }
 
+  /** Warms up the proxied element muted while the direct one keeps playing; `playing` starts the handover. */
+  private startHandover(st: Station) {
+    this.cancelPending()
+    const el = this.proxiedEl
+    const sid = randomId()
+    const id = ++this.handoverId
+    this.proxyFade = 0
+    this.applyVolume()
+    el.src = `${st.stream.proxy}?sid=${sid}`
+    this.pending = {
+      el,
+      sid,
+      id,
+      timer: window.setTimeout(() => {
+        if (this.pending?.id === id) this.abortHandover('timeout')
+      }, HANDOVER_MS),
+    }
+    el.play().catch(() => {
+      if (this.pending?.id === id) this.abortHandover('error')
+    })
+  }
+
+  private handoverReady() {
+    const p = this.pending
+    const st = this.station
+    if (!p || !st) return
+    window.clearTimeout(p.timer)
+    this.pending = null
+    this.el = p.el
+    this.handoverFailedFor = null
+    // ICY metadata now belongs to the proxied session.
+    this.meta?.close()
+    this.openMeta(st.id, p.sid)
+    this.crossfade()
+    this.emit({ type: 'handover', state: 'done', stationId: st.id })
+  }
+
+  /** ~300 ms crossfade, then the direct element is released. */
+  private crossfade() {
+    const started = performance.now()
+    window.clearInterval(this.handoverTimer)
+    this.handoverTimer = window.setInterval(() => {
+      const k = Math.min(1, (performance.now() - started) / HANDOVER_FADE_MS)
+      this.proxyFade = k
+      this.directFade = 1 - k
+      this.applyVolume()
+      if (k < 1) return
+      window.clearInterval(this.handoverTimer)
+      this.handoverTimer = undefined
+      this.releaseDirect()
+    }, HANDOVER_FADE_MS / HANDOVER_FADE_STEPS)
+  }
+
+  private releaseDirect() {
+    const el = this.directEl
+    this.selfPaused.add(el)
+    if (!el.paused) el.pause()
+    if (el.getAttribute('src') !== null) {
+      el.removeAttribute('src')
+      el.load()
+    }
+    this.directFade = 1
+    this.proxyFade = 1
+    this.applyVolume()
+  }
+
+  private cancelPending() {
+    const p = this.pending
+    this.handoverId++
+    if (!p) return
+    window.clearTimeout(p.timer)
+    this.pending = null
+    this.selfPaused.add(p.el)
+    if (!p.el.paused) p.el.pause()
+    if (p.el.getAttribute('src') !== null) {
+      p.el.removeAttribute('src')
+      p.el.load()
+    }
+  }
+
+  /** Drops a warm-up; playback stays where it is, and only timeout/error mark the station as uncapturable. */
+  private abortHandover(reason: 'timeout' | 'error' | 'preference' | 'restart') {
+    const committed = this.el === this.proxiedEl && this.directEl.getAttribute('src') !== null
+    this.cancelPending()
+    window.clearInterval(this.handoverTimer)
+    this.handoverTimer = undefined
+    this.proxyFade = 1
+    this.directFade = 1
+    this.applyVolume()
+    // A crossfade cut short would otherwise leave both streams audible.
+    if (committed) this.releaseDirect()
+    if (reason !== 'timeout' && reason !== 'error') return
+    this.handoverFailedFor = this.station?.id ?? null
+    this.emit({ type: 'handover', state: 'failed', stationId: this.handoverFailedFor ?? '' })
+  }
+
   load(station: Station, autoplay = true) {
     this.teardown()
     this.station = station
     this.retries = 0
     this.announced = false
+    this.lastTitle = ''
     this.el = this.route(station).el
     if (autoplay) this.start()
-    else this.emit({ type: 'status', status: 'idle' })
+    else this.setStatus('idle')
   }
 
   play() {
@@ -199,7 +362,7 @@ export class PlayerEngine {
   stop() {
     this.wantPlaying = false
     this.teardown()
-    this.emit({ type: 'status', status: this.station ? 'paused' : 'idle' })
+    this.setStatus(this.station ? 'paused' : 'idle')
   }
 
   toggle() {
@@ -227,12 +390,12 @@ export class PlayerEngine {
 
   private applyVolume() {
     const v = Math.max(0, Math.min(1, this.muted ? 0 : this.volume * this.duck * this.fade))
-    this.directEl.volume = v
+    this.directEl.volume = v * this.directFade
     if (this.gain) {
       this.proxiedEl.volume = 1
-      this.gain.gain.value = v
+      this.gain.gain.value = v * this.proxyFade
     } else {
-      this.proxiedEl.volume = v
+      this.proxiedEl.volume = v * this.proxyFade
     }
   }
 
@@ -248,7 +411,7 @@ export class PlayerEngine {
     if (!st) return
     this.teardown()
     this.wantPlaying = true
-    this.emit({ type: 'status', status: 'connecting' })
+    this.setStatus('connecting')
     // Re-route on every start: the proxy preference may have changed since load.
     const r = this.route(st)
     this.el = r.el
@@ -260,7 +423,10 @@ export class PlayerEngine {
       return
     }
     el.src = r.proxied ? `${r.url}?sid=${sid}` : r.url
+    // Proxied audio carries ICY titles through our own relay; direct audio is
+    // read by a shared server-side watcher instead.
     if (r.proxied) this.openMeta(st.id, sid)
+    else this.openNowPlaying(st.id)
     this.begin(el)
   }
 
@@ -293,7 +459,16 @@ export class PlayerEngine {
       fragLoadingMaxRetry: 3,
     })
     hls.on(HlsCtor.Events.ERROR, (_e, data) => {
-      if (data.fatal && this.hls === hls) this.fail('hls_' + data.type)
+      if (data.fatal && this.hls === hls) this.fail('hls_' + data.type, data.response?.code || undefined)
+    })
+    // Radio titles travel as ID3 timed metadata inside the stream.
+    hls.on(HlsCtor.Events.FRAG_PARSING_METADATA, (_e, data) => {
+      if (this.hls !== hls) return
+      for (const sample of data.samples) {
+        if (sample.type !== HlsCtor.MetadataSchema.audioId3) continue
+        const title = parseId3Title(sample.data)
+        if (title) this.emitTitle(title)
+      }
     })
     hls.loadSource(st.stream.url)
     hls.attachMedia(el)
@@ -310,7 +485,7 @@ export class PlayerEngine {
         // Autoplay blocked: wait for the listener to press play.
         this.wantPlaying = false
         this.teardown()
-        this.emit({ type: 'status', status: 'paused' })
+        this.setStatus('paused')
       } else if (err.name !== 'AbortError' && this.wantPlaying) {
         this.fail('play_' + err.name)
       }
@@ -318,22 +493,49 @@ export class PlayerEngine {
   }
 
   private openMeta(id: string, sid: string) {
-    const es = new EventSource(api.metaURL(id, sid))
+    this.titleSource(api.metaURL(id, sid))
+  }
+
+  /** Direct streams get shared, station-wide titles from the server (one upstream per station). */
+  private openNowPlaying(id: string) {
+    const es = this.titleSource(api.nowPlayingURL(id))
+    // A non-200 answer fails an EventSource permanently (e.g. 429 watcher
+    // capacity), so there is no retry storm; the "Live now" fallback stays.
+    es.addEventListener('error', () => {
+      if (es.readyState !== EventSource.CLOSED) return
+      es.close()
+      if (this.meta === es) this.meta = null
+    })
+  }
+
+  /** Opens a title SSE stream through emitTitle and remembers it for teardown. */
+  private titleSource(url: string): EventSource {
+    const es = new EventSource(url)
     es.addEventListener('title', (e) => {
+      if (this.meta !== es) return
       try {
         const { title } = JSON.parse((e as MessageEvent<string>).data) as { title: string }
-        this.emit({ type: 'title', title })
+        this.emitTitle(title)
       } catch {
         /* ignore malformed event */
       }
     })
     this.meta = es
+    return es
+  }
+
+  /** Emits a title unless it repeats the last one for this load. */
+  private emitTitle(raw: string) {
+    const title = nextTitle(this.lastTitle, raw)
+    if (title == null) return
+    this.lastTitle = title
+    this.emit({ type: 'title', title })
   }
 
   private onPlaying() {
     window.clearTimeout(this.stallTimer)
     this.startedAt = Date.now()
-    this.emit({ type: 'status', status: 'playing' })
+    this.setStatus('playing')
     if (!this.announced) {
       this.announced = true
       this.emit({ type: 'started' })
@@ -342,7 +544,7 @@ export class PlayerEngine {
 
   private onWaiting() {
     if (!this.wantPlaying) return
-    this.emit({ type: 'status', status: 'buffering' })
+    this.setStatus('buffering')
     this.armStallTimer()
   }
 
@@ -351,25 +553,58 @@ export class PlayerEngine {
     this.stallTimer = window.setTimeout(() => this.wantPlaying && this.fail('stalled'), STALL_MS)
   }
 
-  private fail(code: string) {
+  private fail(_code: string, httpStatus?: number) {
     if (!this.wantPlaying) return
+    // No network is not the station's fault: hold the load until 'online' fires.
+    if (this.offline || navigator.onLine === false) {
+      this.offline = true
+      this.teardown()
+      this.setStatus('offline')
+      return
+    }
     this.teardown()
+    const gen = this.generation
     if (this.startedAt && Date.now() - this.startedAt > STABLE_MS) this.retries = 0
     this.startedAt = 0
     if (this.retries < MAX_RETRIES) {
       this.retries++
-      this.emit({ type: 'status', status: 'connecting' })
+      this.setStatus('connecting')
       this.retryTimer = window.setTimeout(() => this.wantPlaying && this.start(), 1000 * 2 ** this.retries)
       return
     }
     this.wantPlaying = false
-    this.emit({ type: 'status', status: 'error' })
-    this.emit({ type: 'failed', code })
+    this.setStatus('error')
+    const st = this.station
+    void this.probeFailure(st, httpStatus).then((kind) => {
+      // The listener may have tuned elsewhere while the probe ran.
+      if (gen !== this.generation) return
+      this.emit({ type: 'failed', code: kind })
+    })
+  }
+
+  /**
+   * Works out why the load failed without downloading audio again: a proxied
+   * stream is probed for its status and JSON error code, HLS reports its HTTP
+   * status through hls.js, and direct streams hide it behind CORS.
+   */
+  private async probeFailure(st: Station | null, httpStatus?: number): Promise<FailureKind> {
+    if (!st) return 'generic'
+    if (st.stream.type === 'hls') return classifyFailure(httpStatus ?? null, null)
+    const r = this.route(st)
+    if (!r.proxied) return 'generic'
+    const probe = await probeStreamFailure(r.url)
+    return classifyFailure(probe.status, probe.code)
   }
 
   /** Releases network resources without changing wantPlaying. */
   private teardown() {
     this.generation++
+    this.cancelPending()
+    window.clearInterval(this.handoverTimer)
+    this.handoverTimer = undefined
+    this.proxyFade = 1
+    this.directFade = 1
+    this.handoverFailedFor = null
     window.clearTimeout(this.retryTimer)
     window.clearTimeout(this.stallTimer)
     this.meta?.close()

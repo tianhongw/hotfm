@@ -17,15 +17,15 @@ export function readUrl(): UrlState {
   }
 }
 
-export function writeUrl(s: UrlState, mode: 'push' | 'replace') {
+/** Mirror country/region/station into the address bar without adding history entries. */
+export function writeUrl(s: UrlState) {
   const p = new URLSearchParams()
   if (s.country) p.set('c', s.country)
   if (s.region) p.set('r', s.region)
   if (s.station) p.set('s', s.station)
   const next = '?' + p.toString()
   if (next === window.location.search) return
-  if (mode === 'push') window.history.pushState(null, '', next)
-  else window.history.replaceState(null, '', next)
+  window.history.replaceState(null, '', next)
 }
 
 export function shareUrl(stationId: string, country: CountryCode): string {

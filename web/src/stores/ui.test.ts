@@ -44,7 +44,7 @@ describe('search and filter transitions', () => {
       tab: 'all',
     })
   })
-  it('searches locally by default and only expands the current query', () => {
+  it('searches locally by default and keeps a widened search while editing it', () => {
     useUI.getState().setSearchText('KEXP')
     useUI.getState().commitSearch()
     expect(useUI.getState().searchScope).toBe('current')
@@ -55,7 +55,13 @@ describe('search and filter transitions', () => {
     useUI.getState().setSearchScope('current')
     expect(useUI.getState()).toMatchObject({ searchTerm: 'KEXP', searchScope: 'current' })
     useUI.getState().setSearchScope('all')
+    // Editing the same query keeps the widened scope instead of snapping back to the region.
     useUI.getState().setSearchText('音乐')
+    expect(useUI.getState().searchScope).toBe('all')
+    // Clearing the text narrows the next search to the browsed region again.
+    useUI.getState().setSearchText('')
+    expect(useUI.getState()).toMatchObject({ searchText: '', searchTerm: '', searchScope: 'current' })
+    useUI.getState().setSearchText('jazz')
     expect(useUI.getState().searchScope).toBe('current')
   })
   it('picking a location re-runs the active search there', () => {
@@ -63,12 +69,23 @@ describe('search and filter transitions', () => {
     useUI.getState().setLocation('US', 'texas')
     expect(useUI.getState()).toMatchObject({ country: 'US', region: 'texas', searchText: 'jazz', searchTerm: 'jazz', searchScope: 'current' })
   })
-  it('changing library tab removes the active search', () => {
+  it('keeps the active search when switching library tabs', () => {
     useUI.getState().setSearchText('new')
     useUI.getState().commitSearch()
     useUI.getState().setSearchScope('all')
     useUI.getState().setTab('fav')
-    expect(useUI.getState()).toMatchObject({ tab: 'fav', searchText: '', searchTerm: '', searchScope: 'current' })
+    expect(useUI.getState()).toMatchObject({ tab: 'fav', searchText: 'new', searchTerm: 'new', searchScope: 'all' })
+    useUI.getState().setTab('recent')
+    expect(useUI.getState()).toMatchObject({ tab: 'recent', searchText: 'new', searchTerm: 'new', searchScope: 'all' })
+    useUI.getState().setTab('all')
+    expect(useUI.getState()).toMatchObject({ tab: 'all', searchText: 'new', searchTerm: 'new', searchScope: 'all' })
+  })
+  it('stores a toast action so the toast can offer undo', () => {
+    const run = vi.fn()
+    useUI.getState().showToast('Removed from Favorites', { label: 'Undo', run })
+    expect(useUI.getState().toast).toMatchObject({ text: 'Removed from Favorites', action: { label: 'Undo', run } })
+    useUI.getState().toast?.action?.run()
+    expect(run).toHaveBeenCalledOnce()
   })
 })
 

@@ -106,3 +106,108 @@ func TestPromoteAlternate(t *testing.T) {
 		t.Fatalf("after promote: %+v", st)
 	}
 }
+
+func TestStationAliases(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	now := time.Unix(1_700_000_000, 0)
+	_, err := s.ReplaceCountry(ctx, "US", []Station{
+		{ID: "a", Name: "KEXP", RegionKey: "washington", Band: "fm", Freq: f(90.3), StreamURL: "https://a/1", AbsorbedIDs: []string{"old1", "old2", ""}},
+	}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := s.GetStation(ctx, "old1")
+	if err != nil || st.ID != "a" || st.AliasOf != "old1" {
+		t.Fatalf("alias lookup: %+v %v", st, err)
+	}
+	if st, err := s.GetStation(ctx, "a"); err != nil || st.AliasOf != "" {
+		t.Fatalf("direct lookup: %+v %v", st, err)
+	}
+	if _, err := s.GetStation(ctx, "nope"); err != ErrNotFound {
+		t.Fatalf("unknown id: %v", err)
+	}
+
+	// Request order is preserved, aliases carry the requested id, unknown ids drop.
+	items, err := s.GetStations(ctx, []string{"old2", "a", "nope"})
+	if err != nil || len(items) != 2 {
+		t.Fatalf("batch: %d items, %v", len(items), err)
+	}
+	if items[0].ID != "a" || items[0].AliasOf != "old2" || items[1].AliasOf != "" {
+		t.Fatalf("batch order: %+v %+v", items[0], items[1])
+	}
+	// The same canonical station can answer two ids.
+	items, err = s.GetStations(ctx, []string{"a", "old1"})
+	if err != nil || len(items) != 2 || items[0].AliasOf != "" || items[1].AliasOf != "old1" || items[1].ID != "a" {
+		t.Fatalf("batch with alias and canonical: %+v %v", items, err)
+	}
+
+	// Re-sync merges "a" into "b": chains collapse and a self alias is ignored.
+	later := now.Add(time.Hour)
+	if _, err := s.ReplaceCountry(ctx, "US", []Station{
+		{ID: "b", Name: "KEXP", RegionKey: "washington", Band: "fm", Freq: f(90.3), StreamURL: "https://a/1", AbsorbedIDs: []string{"a", "b"}},
+	}, later); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"old1", "old2", "a"} {
+		st, err := s.GetStation(ctx, id)
+		if err != nil || st.ID != "b" || st.AliasOf != id {
+			t.Fatalf("collapsed alias %s: %+v %v", id, st, err)
+		}
+	}
+	if _, err := s.GetStation(ctx, "b"); err != nil {
+		t.Fatalf("self alias: %v", err)
+	}
+
+	// Purge removes the canonical row and the aliases that pointed at it.
+	if _, err := s.ReplaceCountry(ctx, "US", nil, later.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Purge(ctx, later.Add(31*24*time.Hour), 30*24*time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.GetStation(ctx, "old1"); err != ErrNotFound {
+		t.Fatalf("alias survived its canonical: %v", err)
+	}
+}
+
+func TestStationAliasShadowsSoftDeletedRow(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	now := time.Unix(1_700_000_000, 0)
+	// Both ids were published before the merge, as on an upgraded database.
+	_, err := s.ReplaceCountry(ctx, "US", []Station{
+		{ID: "old", Name: "KEXP 90.3", RegionKey: "washington", Band: "fm", Freq: f(90.3), StreamURL: "https://a/1"},
+		{ID: "canon", Name: "KEXP", RegionKey: "washington", Band: "fm", Freq: f(90.3), StreamURL: "https://a/2"},
+	}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids, err := s.ExistingIDs(ctx, "US")
+	if err != nil || !ids["old"] || !ids["canon"] {
+		t.Fatalf("existing ids: %v %v", ids, err)
+	}
+
+	later := now.Add(time.Hour)
+	if _, err := s.ReplaceCountry(ctx, "US", []Station{
+		{ID: "canon", Name: "KEXP", RegionKey: "washington", Band: "fm", Freq: f(90.3), StreamURL: "https://a/2", AbsorbedIDs: []string{"old"}},
+	}, later); err != nil {
+		t.Fatal(err)
+	}
+	// "old" is now soft deleted, but callers still ask for it.
+	st, err := s.GetStation(ctx, "old")
+	if err != nil || st.ID != "canon" || st.AliasOf != "old" || !st.Visible() {
+		t.Fatalf("alias over soft deleted row: %+v %v", st, err)
+	}
+	items, err := s.GetStations(ctx, []string{"old", "canon"})
+	if err != nil || len(items) != 2 || items[0].ID != "canon" || items[0].AliasOf != "old" || items[1].ID != "canon" || items[1].AliasOf != "" {
+		t.Fatalf("batch over soft deleted row: %+v %v", items, err)
+	}
+	// An absorbed id is retired, so later merges cannot resurrect it as the
+	// survivor and flip the canonical id back onto a soft-deleted row.
+	ids, err = s.ExistingIDs(ctx, "US")
+	if err != nil || ids["old"] || !ids["canon"] {
+		t.Fatalf("retired id offered as a survivor: %v %v", ids, err)
+	}
+}

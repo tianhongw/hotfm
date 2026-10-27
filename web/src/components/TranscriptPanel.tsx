@@ -5,6 +5,7 @@ import { closeReplay, cycleReplayRate, openReplay, seekReplay, skipReplay, toggl
 import {
   canCapture,
   canRecord,
+  cancelCaptions,
   discardRecording,
   downloadRecording,
   downloadTranscript,
@@ -35,6 +36,9 @@ import { Logo } from './Logo'
 import s from './TranscriptPanel.module.css'
 
 const mb = (bytes: number) => `${(bytes / 1_048_576).toFixed(bytes < 10_485_760 ? 1 : 0)} MB`
+
+/** Download size per backend in MiB, from the model files on Hugging Face. */
+const MODEL_MB: Record<'webgpu' | 'wasm', number> = { webgpu: 200, wasm: 42 }
 
 /** Non-modal side panel: live captions, transcript download and recording. */
 export function TranscriptPanel({ docked }: { docked: boolean }) {
@@ -74,24 +78,30 @@ function useCaptionStatus() {
   const station = usePlayer((p) => p.station)
   const title = usePlayer((p) => p.title)
   const status = usePlayer((p) => p.status)
-  const { captionsOn, asr, progress, busy, rec } = useCapture()
+  const { captionsOn, asr, progress, busy, rec, proxyFail, backend } = useCapture()
   const english = isEnglish(station)
   const playing = status === 'playing' || status === 'buffering'
+  const active = playing || status === 'connecting'
+  const capturable = !!station && canCapture(station) && proxyFail !== station.id
   const recCaptions = rec.state === 'recording' && rec.withCaptions
   const subtitle = title || (playing ? t('player.live') : status === 'idle' ? t('player.paused') : t(`player.${status}`))
+  const withBackend = (s: string) => (backend ? `${s} · ${backend === 'webgpu' ? 'WebGPU' : 'WASM'}` : s)
 
   let chip: Chip
   if (!captionsOn && recCaptions) {
-    chip = asr === 'ready' ? { tone: 'live', text: t('capture.recAuto') } : { tone: 'busy', text: t('capture.loading', { n: progress }) }
+    chip =
+      asr === 'ready'
+        ? { tone: 'live', text: withBackend(t('capture.recAuto')) }
+        : { tone: 'busy', text: t('capture.loading', { n: progress }) }
   } else if (!captionsOn) chip = { tone: 'idle', text: t('capture.off') }
   else if (station && !english) chip = { tone: 'warn', text: t('capture.englishOnly') }
   else if (asr === 'error') chip = { tone: 'warn', text: t('capture.error') }
-  else if (!canCapture(station)) chip = { tone: 'idle', text: t('capture.needPlay') }
+  else if (!active) chip = { tone: 'idle', text: t('capture.needPlay') }
+  else if (!capturable) chip = { tone: 'warn', text: t('capture.noCapture') }
   else if (asr !== 'ready') chip = { tone: 'busy', text: t('capture.loading', { n: progress }) }
-  else if (!playing) chip = { tone: 'idle', text: t('capture.paused') }
-  else chip = busy ? { tone: 'busy', text: t('capture.transcribing') } : { tone: 'live', text: t('capture.listening') }
+  else chip = busy ? { tone: 'busy', text: withBackend(t('capture.transcribing')) } : { tone: 'live', text: withBackend(t('capture.listening')) }
 
-  return { chip, station, subtitle, english, recCaptions, captionsOn, asr, progress }
+  return { chip, station, subtitle, english, recCaptions, captionsOn, asr, progress, backend, capturable }
 }
 
 /** The CC switch, or a retry link when the speech model failed to load. */
@@ -124,7 +134,9 @@ function StatusChip({ chip }: { chip: Chip }) {
 function Header({ onClose }: { onClose: () => void }) {
   const t = useT()
   const setFull = useUI((u) => u.setCaptionsFull)
-  const { chip, station, subtitle, english, recCaptions, captionsOn, asr, progress } = useCaptionStatus()
+  const { chip, station, subtitle, english, recCaptions, captionsOn, asr, progress, backend, capturable } = useCaptionStatus()
+  const loaded = useCapture((c) => c.loaded)
+  const total = useCapture((c) => c.total)
 
   return (
     <header className={s.head}>
@@ -152,12 +164,20 @@ function Header({ onClose }: { onClose: () => void }) {
         <StatusChip chip={chip} />
         <CaptionSwitch />
       </div>
-      {(captionsOn || recCaptions) && english && asr === 'loading' && canCapture(station) && (
+      {(captionsOn || recCaptions) && english && asr === 'loading' && capturable && (
         <div className={s.loading}>
           <div className={s.bar} role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}>
             <span style={{ width: `${progress}%` }} />
           </div>
-          <small>{t('capture.loadingHint')}</small>
+          <div className={s.loadRow}>
+            <small>{total > 0 ? `${mb(loaded)} / ${mb(total)}` : t('capture.loading', { n: progress })}</small>
+            {backend && <small>{t('capture.loadingHint', { size: MODEL_MB[backend] })}</small>}
+            {captionsOn && (
+              <button className={s.link} onClick={cancelCaptions}>
+                {t('capture.cancel')}
+              </button>
+            )}
+          </div>
         </div>
       )}
     </header>
@@ -222,6 +242,10 @@ function Log() {
             <p key={seg.id} className={s.line} data-latest={seg.id === latest || undefined}>
               <time>{clock(seg.at)}</time>
               <span>{seg.text}</span>
+            </p>
+          ) : seg.kind === 'gap' ? (
+            <p key={seg.id} className={s.divider}>
+              <span>{t('capture.gap', { n: seg.count })}</span>
             </p>
           ) : (
             <p key={seg.id} className={s.divider}>
@@ -505,7 +529,7 @@ function FontSize() {
   )
 }
 
-type Block = { kind: 'para'; id: number; segs: TextSegment[] } | { kind: 'station'; id: number; name: string }
+type Block = { kind: 'para'; id: number; segs: TextSegment[] } | { kind: 'station'; id: number; name: string } | { kind: 'gap'; id: number; count: number }
 
 /** A pause this long between sentences starts a new paragraph. */
 const PARA_GAP_MS = 2500
@@ -516,9 +540,14 @@ function toBlocks(segments: Segment[]): Block[] {
   const blocks: Block[] = []
   let para: Extract<Block, { kind: 'para' }> | null = null
   for (const seg of segments) {
-    if (seg.kind !== 'text') {
+    if (seg.kind === 'station') {
       para = null
       blocks.push({ kind: 'station', id: seg.id, name: seg.name })
+      continue
+    }
+    if (seg.kind === 'gap') {
+      para = null
+      blocks.push({ kind: 'gap', id: seg.id, count: seg.count })
       continue
     }
     const last = para?.segs[para.segs.length - 1]
@@ -552,6 +581,10 @@ function StageReader() {
             b.kind === 'station' ? (
               <p key={b.id} className={s.readerBreak}>
                 {t('capture.switched', { name: b.name })}
+              </p>
+            ) : b.kind === 'gap' ? (
+              <p key={b.id} className={s.readerBreak}>
+                {t('capture.gap', { n: b.count })}
               </p>
             ) : (
               <p key={b.id}>

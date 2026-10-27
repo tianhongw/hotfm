@@ -5,38 +5,55 @@ import { formatFreq } from '../lib/dial'
 import { shareUrl } from '../lib/url'
 import { playStation, toggleFavorite } from '../player/controller'
 import { useUI } from '../stores/ui'
-import { IconExternal, IconHeart, IconLink, IconMore, IconPlay, IconTrash } from './Icons'
+import { IconExternal, IconHeart, IconLink, IconMore, IconPlay, IconTrash, IconWave } from './Icons'
 import { Logo } from './Logo'
 import { MenuItem, Popover } from './Popover'
 import s from './StationRow.module.css'
 
+/** Playback state of the row that is currently loaded. */
+export type RowState = 'playing' | 'loading' | 'error'
+
 interface Props {
   station: Station
-  playing: boolean
+  /** The loaded station, in any non-idle state (highlight + aria-current). */
+  current: boolean
+  /** What that station is doing right now; undefined while paused or offline. */
+  state?: RowState
   favorite: boolean
   onRemove?: () => void
 }
 
-export const StationRow = memo(function StationRow({ station: st, playing, favorite, onRemove }: Props) {
+export const StationRow = memo(function StationRow({ station: st, current, state, favorite, onRemove }: Props) {
   const t = useT()
   const lang = useLang()
   const [menu, setMenu] = useState(false)
 
   const region = st.region.key === 'other' ? '' : lang === 'en' || st.country === 'US' ? st.region.nameEn : st.region.name
   const place = [t(`country.${st.country}`), st.city, region].filter(Boolean).join(' · ')
+  const action = state === 'error' ? t('display.retry') : t('transport.play')
 
   return (
-    <div className={s.row} data-playing={playing || undefined} data-offline={st.offline || undefined}>
-      <button className={s.main} onClick={() => playStation(st)} disabled={st.offline} aria-label={`${t('transport.play')} ${st.name}`}>
+    <div className={s.row} data-current={current || undefined} data-state={state} data-offline={st.offline || undefined}>
+      <button
+        className={s.main}
+        onClick={() => playStation(st)}
+        disabled={st.offline}
+        aria-label={`${action} ${st.name}`}
+        aria-current={current ? 'true' : undefined}
+      >
         <span className={s.logoWrap}>
           <Logo src={st.logo} name={st.name} size={40} />
           <span className={s.playOverlay} aria-hidden>
-            {playing ? (
+            {state === 'playing' ? (
               <span className={s.eq}>
                 <i />
                 <i />
                 <i />
               </span>
+            ) : state === 'loading' ? (
+              <span className={s.spinner} />
+            ) : state === 'error' ? (
+              <IconWave size={16} off />
             ) : (
               <IconPlay size={16} />
             )}
@@ -50,7 +67,7 @@ export const StationRow = memo(function StationRow({ station: st, playing, favor
           </span>
         </span>
         <span className={s.freq} data-net={st.freq == null || undefined}>
-          {st.freq != null ? formatFreq(st.freq) : 'NET'}
+          {st.freq != null ? formatFreq(st.freq) : t('list.net')}
         </span>
         <span className={s.codec}>
           {st.stream.type === 'hls' ? 'HLS' : st.codec}
@@ -74,7 +91,7 @@ export const StationRow = memo(function StationRow({ station: st, playing, favor
           </button>
         )}
         <div className={s.anchor}>
-          <button className={s.icon} onClick={() => setMenu((m) => !m)} aria-haspopup="menu" aria-expanded={menu} aria-label="More">
+          <button className={s.icon} onClick={() => setMenu((m) => !m)} aria-haspopup="menu" aria-expanded={menu} aria-label={t('menu.more')}>
             <IconMore size={16} />
           </button>
           <Popover open={menu} onClose={() => setMenu(false)}>

@@ -11,6 +11,7 @@ import type { AsrRequest, AsrResponse } from './asr'
 import { Chunker, cleanText, resample, rms, type Chunk } from './dsp'
 import { buildZip, fileBase, inRange, saveFile, toSrt, toTxt } from './export'
 import { createPcmTap } from './pcm'
+import { enqueue } from './queue'
 
 /** Below this level a chunk is treated as silence and not transcribed. */
 const SILENCE_RMS = 0.004
@@ -65,12 +66,18 @@ let lastInterimAt = 0
 /** Smoothed time of one Whisper call, in ms. */
 let inferMs = 0
 let sentAt = 0
-/** Whisper is needed (live captions, or a recording being transcribed); otherwise it is freed once idle. */
-let asrWanted = false
 let tapping = false
 let tapNode: AudioWorkletNode | null = null
 let untap: (() => void) | null = null
 let chunker: Chunker | null = null
+
+/** Whisper is needed while captions are on or a recording still has untranscribed utterances; otherwise it is freed once idle. */
+function workerNeeded(): boolean {
+  const { captionsOn, rec } = useCapture.getState()
+  const { station } = usePlayer.getState()
+  const recCaptions = rec.state === 'recording' && rec.withCaptions && canCapture(station) && station?.id === rec.stationId
+  return captionsOn || recCaptions || queue.some((j) => j.keep) || !!inflight?.keep
+}
 
 function send(m: AsrRequest, transfer: Transferable[] = []) {
   worker?.postMessage(m, transfer)
@@ -79,7 +86,7 @@ function send(m: AsrRequest, transfer: Transferable[] = []) {
 function ensureWorker() {
   if (worker) return
   const cap = useCapture.getState()
-  cap.set({ asr: 'loading', progress: 0, busy: false })
+  cap.set({ asr: 'loading', progress: 0, loaded: 0, total: 0, busy: false })
   const w = new Worker(new URL('./asr.worker.ts', import.meta.url), { type: 'module' })
   w.onmessage = (e: MessageEvent<AsrResponse>) => onWorker(e.data)
   w.onerror = () => {
@@ -91,19 +98,21 @@ function ensureWorker() {
 }
 
 function stopWorker() {
+  // Anything still waiting is lost, including a recording's utterances; make that visible.
+  noteDrop([...(inflight?.keep ? [inflight] : []), ...queue])
   worker?.terminate()
   worker = null
   inflight = null
   queue = []
   interimFrame = -1
-  useCapture.getState().set({ asr: 'idle', progress: 0, busy: false, interim: null })
+  useCapture.getState().set({ asr: 'idle', progress: 0, loaded: 0, total: 0, backend: null, busy: false, interim: null })
 }
 
 function onWorker(m: AsrResponse) {
   const cap = useCapture.getState()
   switch (m.type) {
     case 'progress':
-      cap.set({ progress: Math.round(m.progress) })
+      cap.set({ progress: Math.round(m.progress), loaded: m.loaded, total: m.total, backend: m.backend })
       break
     case 'ready':
       cap.set({ asr: 'ready', backend: m.backend, progress: 100 })
@@ -141,7 +150,7 @@ function onWorker(m: AsrResponse) {
         }
       }
       pump()
-      if (!asrWanted && !inflight) stopWorker()
+      if (!workerNeeded() && !inflight) stopWorker()
       break
     }
   }
@@ -168,12 +177,17 @@ function job(kind: Job['kind'], c: Chunk, ctx: AudioContext): Job {
 
 function onChunk(c: Chunk, ctx: AudioContext) {
   if (rms(c.pcm) < SILENCE_RMS) return
-  queue.push(job('final', c, ctx))
-  // Drop the oldest live-only utterances first; a recording's are kept up to a hard cap.
-  const live = queue.filter((j) => !j.keep)
-  while (live.length > MAX_QUEUE) queue.splice(queue.indexOf(live.shift()!), 1)
-  while (queue.length > MAX_QUEUE_RECORDING) queue.shift()
+  const { next, dropped } = enqueue(queue, job('final', c, ctx), MAX_QUEUE, MAX_QUEUE_RECORDING)
+  queue = next
+  noteDrop(dropped)
   pump()
+}
+
+/** Utterances of a recording that will never be transcribed become a visible gap. */
+function noteDrop(dropped: Job[]) {
+  const keeps = dropped.filter((j) => j.keep)
+  if (!keeps.length) return
+  useCapture.getState().addGap(keeps[0]!.at, keeps.reduce((n, j) => n + j.dur, 0), keeps.length)
 }
 
 /** Sends the utterance in progress for transcription now (e.g. when a recording stops mid-sentence). */
@@ -236,7 +250,8 @@ function stopTap() {
   tapNode?.disconnect()
   tapNode = null
   chunker = null
-  queue = []
+  // A recording's utterances still waiting must survive its tap ending.
+  queue = queue.filter((j) => j.keep)
   interimFrame = -1
   useCapture.getState().set({ interim: null })
 }
@@ -340,6 +355,8 @@ async function drain(until: number) {
     if (Date.now() > deadline) return
     await new Promise((r) => window.setTimeout(r, 250))
   }
+  // The recording's backlog is done; free the model unless captions (or another recording) still need it.
+  if (worker && !inflight && queue.length === 0 && !workerNeeded()) stopWorker()
 }
 
 /** Downloads the recording; English stations come with their transcript (zip), others as plain audio. */
@@ -351,7 +368,7 @@ export async function downloadRecording() {
   // MediaRecorder leaves the duration out of WebM headers, so players can't show or seek it.
   const audio = rec.ext === 'webm' ? await fixWebmDuration(rec.blob, rec.endedAt - rec.startedAt, { logger: false }) : rec.blob
   const segs = inRange(useCapture.getState().segments, rec.startedAt, rec.endedAt)
-  if (segs.some((s) => s.kind === 'text')) {
+  if (segs.some((s) => s.kind === 'text' || s.kind === 'gap')) {
     const txt = toTxt(segs, rec.stationName, rec.startedAt, rec.endedAt)
     const srt = toSrt(segs, rec.startedAt, rec.endedAt)
     const zip = buildZip(new Uint8Array(await audio.arrayBuffer()), rec.ext, txt, srt)
@@ -369,8 +386,9 @@ export function downloadTranscript() {
   const last = segments[segments.length - 1]
   if (!first || !last) return
   const name = usePlayer.getState().station?.name ?? 'Transcript'
-  const end = last.at + (last.kind === 'text' ? last.dur : 0)
+  const end = last.kind === 'station' ? last.at : last.at + last.dur
   saveFile(new Blob([toTxt(segments, name, first.at, end)], { type: 'text/plain;charset=utf-8' }), `${fileBase(name, first.at)}.txt`)
+  useCapture.getState().set({ dirty: false })
 }
 
 // --- wiring ---
@@ -379,6 +397,7 @@ function reconcile() {
   const { station, status } = usePlayer.getState()
   const cap = useCapture.getState()
   const rec = cap.rec
+  if (cap.proxyFail && cap.proxyFail !== station?.id) cap.set({ proxyFail: null })
   const recording = rec.state === 'recording'
   // A recording follows one station; tuning away or stopping finishes it.
   if (rec.state === 'recording' && (station?.id !== rec.stationId || status === 'paused' || status === 'idle' || status === 'error')) {
@@ -396,15 +415,20 @@ function reconcile() {
   } else {
     stopTap()
   }
-  // Keep the model warm across stations while captions are on; otherwise free it once the backlog is done.
-  asrWanted = cap.captionsOn || recCaptions
-  if (!asrWanted && worker && !inflight && queue.length === 0) stopWorker()
+  // Keep the model warm across stations while captions are on; a recording's backlog still needs it after its tap ends.
+  if (!workerNeeded() && worker && !inflight && queue.length === 0) stopWorker()
 }
 
 /** After a model load error. */
 export function retryCaptions() {
   stopWorker()
   reconcile()
+}
+
+/** Gives up on the model download: captions off, worker dropped. */
+export function cancelCaptions() {
+  useCapture.getState().setCaptions(false)
+  stopWorker()
 }
 
 /** Call once at startup. */
@@ -415,8 +439,13 @@ export function initCapture() {
   useCapture.subscribe((s, p) => {
     if (s.captionsOn !== p.captionsOn || s.rec.state !== p.rec.state) reconcile()
   })
+  engine.on((e) => {
+    if (e.type !== 'handover') return
+    useCapture.getState().set({ proxyFail: e.state === 'failed' ? e.stationId : null })
+    reconcile()
+  })
   window.addEventListener('beforeunload', (e) => {
-    const { rec } = useCapture.getState()
-    if (rec.state === 'recording' || (rec.state === 'done' && !rec.saved)) e.preventDefault()
+    const { rec, dirty } = useCapture.getState()
+    if (rec.state === 'recording' || (rec.state === 'done' && !rec.saved) || dirty) e.preventDefault()
   })
 }

@@ -22,27 +22,14 @@ export function useBootstrap() {
     }
     void refreshLibrary(libraryIds())
 
-    // Keep the URL in step with country/region; station changes push history entries in playStation.
+    // Keep the URL in step with country/region; station changes rewrite it in place too (no history entries).
     const unsub = useUI.subscribe((s, prev) => {
       if (s.country !== prev.country || s.region !== prev.region) {
-        writeUrl({ country: s.country, region: s.region || undefined, station: usePlayer.getState().station?.id }, 'replace')
+        writeUrl({ country: s.country, region: s.region || undefined, station: usePlayer.getState().station?.id })
         void queryClient.prefetchQuery({ queryKey: ['dial', s.country, s.region], queryFn: () => api.dial(s.country, s.region || undefined) })
       }
     })
 
-    const onPop = () => {
-      const u = readUrl()
-      const st = useUI.getState()
-      if (u.country && u.country !== st.country) st.setCountry(u.country)
-      if ((u.region ?? '') !== st.region) st.setRegion(u.region ?? '')
-      const current = usePlayer.getState().station?.id
-      if (u.station && u.station !== current) void playStationById(u.station).catch(() => {})
-    }
-    window.addEventListener('popstate', onPop)
-
-    return () => {
-      unsub()
-      window.removeEventListener('popstate', onPop)
-    }
+    return unsub
   }, [])
 }

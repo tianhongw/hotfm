@@ -14,9 +14,16 @@ export interface RegionRef {
 
 const RECENT_REGIONS_MAX = 6
 
-interface Toast {
+export interface ToastAction {
+  label: string
+  run: () => void
+}
+
+export interface Toast {
   id: number
   text: string
+  /** e.g. Undo after a removal; toasts with an action stay up longer. */
+  action?: ToastAction
 }
 
 interface UIState {
@@ -63,7 +70,7 @@ interface UIState {
   setTranscriptOpen: (o: boolean) => void
   setCaptionsFull: (o: boolean) => void
   setReaderSize: (px: number) => void
-  showToast: (text: string) => void
+  showToast: (text: string, action?: ToastAction) => void
 }
 
 let seq = 0
@@ -109,18 +116,23 @@ export const useUI = create<UIState>()(
             : s.recentRegions,
         })),
       setSearchText: (searchText) =>
-        set((s) => ({
-          searchText,
-          searchTerm: searchText.trim() ? s.searchTerm : '',
-          searchScope: s.searchText === searchText ? s.searchScope : 'current',
-          tab: 'all',
-        })),
+        set((s) => {
+          const typed = !!searchText.trim()
+          return {
+            searchText,
+            searchTerm: typed ? s.searchTerm : '',
+            // A widened search stays widened while the listener edits it; clearing the text narrows it again.
+            searchScope: typed ? s.searchScope : 'current',
+            tab: 'all',
+          }
+        }),
       commitSearch: () => set((s) => ({ searchTerm: s.searchText.trim() })),
       setSearchScope: (searchScope) => set({ searchScope }),
       focusSearch: () => set((s) => ({ searchFocus: s.searchFocus + 1, tab: 'all' })),
       resetFilters: () => set({ region: '', searchText: '', searchTerm: '', searchScope: 'current', sort: 'popular', tab: 'all' }),
       setSort: (sort) => set({ sort }),
-      setTab: (tab) => set({ tab, searchText: '', searchTerm: '', searchScope: 'current' }),
+      // Favorites/Recent show their own full lists; the Stations query survives the detour.
+      setTab: (tab) => set({ tab }),
       setAppearanceOpen: (appearanceOpen) => set({ appearanceOpen }),
       setLocationOpen: (locationOpen) => set({ locationOpen }),
       setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
@@ -129,7 +141,7 @@ export const useUI = create<UIState>()(
       setTranscriptOpen: (transcriptOpen) => set(transcriptOpen ? { transcriptOpen } : { transcriptOpen, captionsFull: false }),
       setCaptionsFull: (captionsFull) => set({ captionsFull }),
       setReaderSize: (px) => set({ readerSize: Math.min(READER_SIZE.max, Math.max(READER_SIZE.min, px)) }),
-      showToast: (text) => set({ toast: { id: ++seq, text } }),
+      showToast: (text, action) => set({ toast: { id: ++seq, text, action } }),
     }),
     {
       name: 'hotfm.ui',

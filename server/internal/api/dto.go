@@ -40,6 +40,9 @@ type stationDTO struct {
 	Health   string    `json:"health"`
 	Offline  bool      `json:"offline"`
 	Votes    int       `json:"votes"`
+	// AliasOf is set when the requested id was absorbed by a merge and echoes
+	// that requested id, so clients can heal their stored entries.
+	AliasOf string `json:"aliasOf,omitempty"`
 }
 
 func (s *Server) stationDTO(st *store.Station) stationDTO {
@@ -48,7 +51,8 @@ func (s *Server) stationDTO(st *store.Station) stationDTO {
 		Region: regionDTO{st.RegionKey, st.RegionName, st.RegionEn},
 		City:   st.City, Freq: st.Freq, Band: st.Band, Tags: st.Tags, Language: st.Language, Codec: st.Codec,
 		Bitrate: st.Bitrate, Homepage: st.Homepage, Health: st.Health, Offline: !st.Visible(), Votes: st.Votes,
-		Stream: s.streamFor(st),
+		AliasOf: st.AliasOf,
+		Stream:  s.streamFor(st),
 	}
 	if st.Favicon != "" {
 		l := "/api/v1/logo/" + url.PathEscape(st.ID)

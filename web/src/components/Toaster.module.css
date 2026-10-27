@@ -32,6 +32,23 @@
   box-shadow: var(--amber-glow);
 }
 
+/* The region ignores pointer events so it never blocks the UI; the action re-enables them. */
+.action {
+  pointer-events: auto;
+  flex: none;
+  min-height: 32px;
+  padding: 0 2px;
+  margin-left: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--amber);
+  white-space: nowrap;
+}
+
+.action:hover {
+  text-decoration: underline;
+}
+
 @keyframes up {
   from {
     opacity: 0;

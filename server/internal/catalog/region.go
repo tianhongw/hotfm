@@ -139,15 +139,28 @@ var usByLength = func() []usState {
 	return s
 }()
 
-var reDC = regexp.MustCompile(`(?i)\b(washington,?\s*d\.?c\.?|d\.c\.)`)
+var (
+	reDC = regexp.MustCompile(`(?i)\b(washington,?\s*d\.?c\.?|d\.c\.)`)
+	// Trailing postal abbreviation in a station name: "Amherst, MA", "KFI LA".
+	reNameAbbr = regexp.MustCompile("[,\\s]([A-Za-z]{2})$")
+)
+
+var usByAbbr = func() map[string]usState {
+	m := make(map[string]usState, len(usStates))
+	for _, st := range usStates {
+		m[st.abbr] = st
+	}
+	return m
+}()
 
 // NormalizeUS parses values like "California", "San Francisco CA",
 // "Chicago, IL", "New York City, New York" or "California - San Francisco"
-// into a state and, when present, a city.
-func NormalizeUS(state string) (r Region, city string) {
+// into a state and, when present, a city. The state field wins; when it names
+// no US place the station name is consulted ("Magic 80s Florida").
+func NormalizeUS(state, name string) (r Region, city string) {
 	s := strings.Join(strings.Fields(state), " ")
 	if s == "" {
-		return usOther, ""
+		return usFromStationName(name)
 	}
 	if loc := reDC.FindStringIndex(s); loc != nil {
 		return usRegion(usState{"DC", "District of Columbia"}), "Washington"
@@ -178,7 +191,63 @@ func NormalizeUS(state string) (r Region, city string) {
 			return usRegion(st), titleCase(rest)
 		}
 	}
-	return usOther, ""
+	return usFromStationName(name)
+}
+
+// usFromStationName infers the state from a station name. Only the region is
+// taken from the name; the city stays unknown unless the name says "DC".
+func usFromStationName(name string) (Region, string) {
+	st, ok := usFromName(name)
+	if !ok {
+		return usOther, ""
+	}
+	if st.abbr == "DC" {
+		return usRegion(st), "Washington"
+	}
+	return usRegion(st), ""
+}
+
+// usFromName guesses a US state from a station name: a DC marker, a trailing
+// two-letter postal abbreviation ("WFCR Amherst, MA") or a full state name
+// ("Magic 80s Florida"), matched whole-word and longest name first so that
+// "West Virginia" beats "Virginia".
+func usFromName(name string) (usState, bool) {
+	n := cleanName(name)
+	if n == "" {
+		return usState{}, false
+	}
+	if reDC.MatchString(n) {
+		return usByAbbr["DC"], true
+	}
+	if m := reNameAbbr.FindStringSubmatch(n); m != nil {
+		if st, ok := usByAbbr[strings.ToUpper(m[1])]; ok {
+			// "KFI LA" is a callsign plus a market, not Louisiana.
+			if !(len(strings.Fields(n)) == 2 && callsignKey(n) != "") {
+				return st, true
+			}
+		}
+	}
+	words := usNameWords(n)
+	for _, st := range usByLength {
+		if strings.Contains(words, " "+strings.ToLower(st.name)+" ") {
+			return st, true
+		}
+	}
+	return usState{}, false
+}
+
+// usNameWords lowercases a name and turns every non-letter into a space, so
+// state names can be matched as whole words.
+func usNameWords(name string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(name) {
+		if (r >= 'a' && r <= 'z') || r == '\'' {
+			b.WriteRune(r)
+		} else {
+			b.WriteRune(' ')
+		}
+	}
+	return " " + strings.Join(strings.Fields(b.String()), " ") + " "
 }
 
 func usRegion(st usState) Region {

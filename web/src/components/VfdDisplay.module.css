@@ -238,6 +238,20 @@
   color: var(--amber);
 }
 
+.errorBox {
+  margin-top: 8px;
+  position: relative;
+  z-index: 3;
+}
+
+.errorReason {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  letter-spacing: 0.02em;
+  color: color-mix(in srgb, var(--red) 85%, var(--vfd-fg));
+}
+
 .errorActions {
   display: flex;
   gap: 8px;

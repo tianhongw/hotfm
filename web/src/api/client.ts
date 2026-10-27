@@ -54,4 +54,6 @@ export const api = {
   report: (id: string, kind: 'playback_error' | 'stalled') =>
     request<void>(`/stations/${encodeURIComponent(id)}/report`, { method: 'POST', body: JSON.stringify({ kind }) }),
   metaURL: (id: string, sid: string) => `${BASE}/stream/${encodeURIComponent(id)}/meta${qs({ sid })}`,
+  /** Station-wide SSE titles (one shared upstream connection for all listeners). */
+  nowPlayingURL: (id: string) => `${BASE}/stations/${encodeURIComponent(id)}/nowplaying`,
 }

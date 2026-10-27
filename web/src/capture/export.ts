@@ -5,6 +5,8 @@ export type Segment =
   | { kind: 'text'; id: number; at: number; dur: number; text: string }
   /** Marks where the listener tuned to another station. */
   | { kind: 'station'; id: number; at: number; name: string }
+  /** Utterances a recording lost before they were transcribed. */
+  | { kind: 'gap'; id: number; at: number; dur: number; count: number }
 
 const pad = (n: number, w = 2) => String(n).padStart(w, '0')
 
@@ -34,12 +36,19 @@ export function dateTime(ms: number): string {
 }
 
 export function inRange(segments: Segment[], from: number, to: number): Segment[] {
-  return segments.filter((s) => s.at + (s.kind === 'text' ? s.dur : 0) > from && s.at < to)
+  return segments.filter((s) => {
+    const d = s.kind === 'station' ? 0 : s.dur
+    return s.at + d > from && s.at < to
+  })
 }
 
 export function toTxt(segments: Segment[], title: string, from: number, to: number): string {
   const lines = [`HotFM — ${title}`, `${dateTime(from)} – ${dateTime(to).slice(11)}`, 'Transcribed automatically on this device; may contain errors.', '']
-  for (const s of segments) lines.push(s.kind === 'text' ? `[${clock(s.at)}] ${s.text}` : `\n— ${s.name} —\n`)
+  for (const s of segments) {
+    if (s.kind === 'text') lines.push(`[${clock(s.at)}] ${s.text}`)
+    else if (s.kind === 'station') lines.push(`\n— ${s.name} —\n`)
+    else lines.push(`[${clock(s.at)}] [not transcribed: ${s.count} utterances]`)
+  }
   return lines.join('\n') + '\n'
 }
 

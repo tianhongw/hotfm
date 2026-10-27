@@ -84,10 +84,11 @@ func run(log *slog.Logger) error {
 		Log:      log.With("component", "sync"),
 		OnSynced: func(string) { checker.Wake() },
 	}
+	nowPlaying := stream.NewNowPlaying(upstream, cfg.UserAgent, log.With("component", "nowplaying"), cfg.MaxMetadataWatchers)
 	srv := api.New(api.Deps{
-		Config: cfg, Store: db, Proxy: proxy, Hub: hub,
+		Config: cfg, Store: db, Proxy: proxy, Hub: hub, NowPlaying: nowPlaying,
 		Logos:   &logo.Cache{Dir: filepath.Join(cfg.DataDir, "logos"), Client: upstream, UserAgent: cfg.UserAgent},
-		Checker: checker, Radio: rb, Log: log,
+		Checker: checker, Radio: rb, Sync: syncer, Log: log,
 	})
 
 	go syncer.Run(ctx)

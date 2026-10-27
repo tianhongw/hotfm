@@ -3,7 +3,7 @@ import { useDial } from '../api/hooks'
 import { useT } from '../i18n'
 import { formatFreq, nearestSlot } from '../lib/dial'
 import { seek, togglePlay } from '../player/controller'
-import { usePlayer, useTuner } from '../stores/player'
+import { failureKey, usePlayer, useTuner } from '../stores/player'
 import { useUI } from '../stores/ui'
 import { Marquee } from './Marquee'
 import s from './VfdDisplay.module.css'
@@ -32,7 +32,7 @@ function useMinutesLeft(until: number | null): number | null {
 
 export function VfdDisplay({ compact = false }: { compact?: boolean }) {
   const t = useT()
-  const { station, status, title } = usePlayer()
+  const { station, status, title, errorCode } = usePlayer()
   const sleepUntil = usePlayer((p) => p.sleepUntil)
   const { freq, tuning } = useTuner()
   const country = useUI((u) => u.country)
@@ -56,9 +56,15 @@ export function VfdDisplay({ compact = false }: { compact?: boolean }) {
     : station
       ? [station.city, station.region.key !== 'other' ? station.region.name : ''].filter(Boolean).join(' · ')
       : ''
+  // Announce station/status changes only; dragging the dial stays silent.
+  const statusLabel = status === 'playing' ? t('player.live') : status === 'idle' ? t('status.idle') : t(`player.${status}`)
+  const announcement = tuning ? '' : [name, statusLabel].filter(Boolean).join(' — ')
 
   return (
-    <section className={s.display} data-compact={compact || undefined} aria-live="polite" aria-label="Display">
+    <section className={s.display} data-compact={compact || undefined} aria-label={t('display.label')}>
+      <span className="sr-only" aria-live="polite" aria-atomic="true">
+        {announcement}
+      </span>
       <div className={s.scan} aria-hidden />
       <header className={s.top}>
         <div className={s.chips}>
@@ -130,9 +136,12 @@ export function VfdDisplay({ compact = false }: { compact?: boolean }) {
           </Marquee>
         )}
         {!tuning && status === 'error' && (
-          <div className={s.errorActions}>
-            <button onClick={() => togglePlay()}>{t('display.retry')}</button>
-            <button onClick={() => seek(1)}>{t('display.next')}</button>
+          <div className={s.errorBox}>
+            <p className={s.errorReason}>{t(failureKey(errorCode))}</p>
+            <div className={s.errorActions}>
+              <button onClick={() => togglePlay()}>{t('display.retry')}</button>
+              <button onClick={() => seek(1)}>{t('display.next')}</button>
+            </div>
           </div>
         )}
       </div>

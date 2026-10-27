@@ -44,6 +44,13 @@ type Station struct {
 	DeletedAt  *int64
 	Health     string
 	LastOKAt   *int64
+
+	// AbsorbedIDs lists the raw ids a merge folded into this row. It is written
+	// on sync as station aliases and never stored as a column.
+	AbsorbedIDs []string
+	// AliasOf is set when the station was fetched through an absorbed id: it
+	// holds the id the caller asked for. Never a column either.
+	AliasOf string
 }
 
 // Visible reports whether the station should appear in listings.
@@ -141,6 +148,9 @@ ON CONFLICT(id) DO UPDATE SET
 			return 0, err
 		}
 	}
+	if err := replaceAliases(ctx, tx, stations, ts); err != nil {
+		return 0, err
+	}
 	res, err := tx.ExecContext(ctx, `UPDATE stations SET deleted_at = ? WHERE country = ? AND synced_at < ? AND deleted_at IS NULL`, ts, country, ts)
 	if err != nil {
 		return 0, err
@@ -149,18 +159,128 @@ ON CONFLICT(id) DO UPDATE SET
 	return int(n), tx.Commit()
 }
 
+// replaceAliases records the ids that a merge folded into other rows and
+// collapses chains (a -> b -> c becomes a -> c). Chains are bounded so a
+// pathological cycle cannot loop forever.
+func replaceAliases(ctx context.Context, tx *sql.Tx, stations []Station, ts int64) error {
+	stmt, err := tx.PrepareContext(ctx, `INSERT INTO station_aliases (old_id, canonical_id, created_at) VALUES (?,?,?)
+		ON CONFLICT(old_id) DO UPDATE SET canonical_id=excluded.canonical_id`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	// A published row cannot stay retired: dropping its stale alias keeps a
+	// re-merge from chaining the survivor back onto an earlier one.
+	del, err := tx.PrepareContext(ctx, `DELETE FROM station_aliases WHERE old_id = ?`)
+	if err != nil {
+		return err
+	}
+	defer del.Close()
+	for i := range stations {
+		if _, err := del.ExecContext(ctx, stations[i].ID); err != nil {
+			return err
+		}
+	}
+	for i := range stations {
+		st := &stations[i]
+		for _, old := range st.AbsorbedIDs {
+			if old == "" || old == st.ID {
+				continue
+			}
+			if _, err := stmt.ExecContext(ctx, old, st.ID, ts); err != nil {
+				return err
+			}
+		}
+	}
+	for range maxAliasHops {
+		var pending int
+		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM station_aliases a
+			WHERE EXISTS (SELECT 1 FROM station_aliases b WHERE b.old_id = a.canonical_id)`).Scan(&pending); err != nil {
+			return err
+		}
+		if pending == 0 {
+			break
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE station_aliases
+			SET canonical_id = (SELECT a2.canonical_id FROM station_aliases a2 WHERE a2.old_id = station_aliases.canonical_id)
+			WHERE canonical_id IN (SELECT old_id FROM station_aliases)`); err != nil {
+			return err
+		}
+	}
+	_, err = tx.ExecContext(ctx, `DELETE FROM station_aliases WHERE old_id = canonical_id`)
+	return err
+}
+
 // Purge permanently removes stations that have been gone upstream, or dead,
-// for longer than maxAge. Favourites pointing at them then resolve as missing.
+// for longer than maxAge. Their aliases go with them, so old favourites resolve
+// as missing instead of resurrecting a purged row.
 func (s *Store) Purge(ctx context.Context, now time.Time, maxAge time.Duration) (int, error) {
 	cutoff := now.Add(-maxAge).Unix()
-	res, err := s.db.ExecContext(ctx, `DELETE FROM stations
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	res, err := tx.ExecContext(ctx, `DELETE FROM stations
 		WHERE (deleted_at IS NOT NULL AND deleted_at < ?)
 		   OR (health = 'dead' AND first_fail_at IS NOT NULL AND first_fail_at < ?)`, cutoff, cutoff)
 	if err != nil {
 		return 0, err
 	}
 	n, _ := res.RowsAffected()
-	return int(n), nil
+	if _, err := tx.ExecContext(ctx, `DELETE FROM station_aliases WHERE canonical_id NOT IN (SELECT id FROM stations)`); err != nil {
+		return int(n), err
+	}
+	return int(n), tx.Commit()
+}
+
+// ExistingIDs returns the ids a merge may keep as its survivor: rows published
+// for a country, soft-deleted ones included, but never an id station_aliases
+// already retired. Preferring an absorbed id would let the canonical id flip on
+// a later sync and leave favourites pointing at a soft-deleted row.
+func (s *Store) ExistingIDs(ctx context.Context, country string) (map[string]bool, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id FROM stations WHERE country = ?
+		AND id NOT IN (SELECT old_id FROM station_aliases)`, country)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]bool{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out[id] = true
+	}
+	return out, rows.Err()
+}
+
+// maxAliasHops bounds alias chain walking and collapsing.
+const maxAliasHops = 5
+
+// aliasTarget follows station_aliases to the surviving id. It returns
+// ErrNotFound when id is not an alias.
+func (s *Store) aliasTarget(ctx context.Context, id string) (string, error) {
+	current, found := id, false
+	for range maxAliasHops {
+		var canonical string
+		err := s.db.QueryRowContext(ctx, "SELECT canonical_id FROM station_aliases WHERE old_id = ?", current).Scan(&canonical)
+		if errors.Is(err, sql.ErrNoRows) {
+			break
+		}
+		if err != nil {
+			return "", err
+		}
+		if canonical == current {
+			break
+		}
+		current, found = canonical, true
+	}
+	if !found {
+		return "", ErrNotFound
+	}
+	return current, nil
 }
 
 type Query struct {
@@ -250,7 +370,8 @@ func collect(rows *sql.Rows) ([]*Station, error) {
 	return out, rows.Err()
 }
 
-func (s *Store) GetStation(ctx context.Context, id string) (*Station, error) {
+// stationRow loads one station regardless of its visibility.
+func (s *Store) stationRow(ctx context.Context, id string) (*Station, error) {
 	st, err := scanStation(s.db.QueryRowContext(ctx, "SELECT "+stationCols+" FROM stations WHERE id = ?", id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -258,12 +379,7 @@ func (s *Store) GetStation(ctx context.Context, id string) (*Station, error) {
 	return st, err
 }
 
-// GetStations returns the stations that still exist (including dead or
-// deleted ones, so clients can show them as offline), in the order of ids.
-func (s *Store) GetStations(ctx context.Context, ids []string) ([]*Station, error) {
-	if len(ids) == 0 {
-		return nil, nil
-	}
+func (s *Store) stationsByIDs(ctx context.Context, ids []string) (map[string]*Station, error) {
 	ph := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
 	args := make([]any, len(ids))
 	for i, id := range ids {
@@ -278,12 +394,102 @@ func (s *Store) GetStations(ctx context.Context, ids []string) ([]*Station, erro
 	if err != nil {
 		return nil, err
 	}
-	byID := make(map[string]*Station, len(found))
+	m := make(map[string]*Station, len(found))
 	for _, st := range found {
-		byID[st.ID] = st
+		m[st.ID] = st
 	}
-	out := make([]*Station, 0, len(found))
+	return m, nil
+}
+
+// GetStation loads a station by id. An id that a merge absorbed (and whose own
+// row is gone or soft deleted) resolves to the surviving station, which then
+// carries the requested id in AliasOf.
+func (s *Store) GetStation(ctx context.Context, id string) (*Station, error) {
+	st, err := s.stationRow(ctx, id)
+	if err != nil && !errors.Is(err, ErrNotFound) {
+		return nil, err
+	}
+	if err == nil && st.DeletedAt == nil {
+		return st, nil
+	}
+	canonical, aerr := s.aliasTarget(ctx, id)
+	if aerr == nil {
+		target, terr := s.stationRow(ctx, canonical)
+		if terr != nil {
+			return nil, terr
+		}
+		target.AliasOf = id
+		return target, nil
+	}
+	if !errors.Is(aerr, ErrNotFound) {
+		return nil, aerr
+	}
+	if st == nil {
+		return nil, ErrNotFound
+	}
+	return st, nil
+}
+
+// GetStations returns the stations that still exist (including dead or
+// deleted ones, so clients can show them as offline), in the order of ids.
+// Ids absorbed by a merge resolve to the surviving station.
+func (s *Store) GetStations(ctx context.Context, ids []string) ([]*Station, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	byID, err := s.stationsByIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	// Rows that are missing or were soft deleted by a merge may be aliases.
+	var strays []string
 	for _, id := range ids {
+		if st, ok := byID[id]; !ok || st.DeletedAt != nil {
+			strays = append(strays, id)
+		}
+	}
+	resolved := make(map[string]string, len(strays))
+	if len(strays) > 0 {
+		var targets []string
+		for _, id := range strays {
+			canonical, aerr := s.aliasTarget(ctx, id)
+			if errors.Is(aerr, ErrNotFound) {
+				continue
+			}
+			if aerr != nil {
+				return nil, aerr
+			}
+			resolved[id] = canonical
+			if _, ok := byID[canonical]; !ok {
+				targets = append(targets, canonical)
+			}
+		}
+		if len(targets) > 0 {
+			more, merr := s.stationsByIDs(ctx, targets)
+			if merr != nil {
+				return nil, merr
+			}
+			for id, st := range more {
+				byID[id] = st
+			}
+		}
+	}
+	out := make([]*Station, 0, len(ids))
+	for _, id := range ids {
+		if st, ok := byID[id]; ok && st.DeletedAt == nil {
+			out = append(out, st)
+			continue
+		}
+		if canonical, ok := resolved[id]; ok {
+			if st, ok := byID[canonical]; ok {
+				// A copy, because the same canonical station may answer several ids.
+				cp := *st
+				cp.AliasOf = id
+				out = append(out, &cp)
+			}
+			continue
+		}
+		// Soft deleted without an alias: still reported so clients show it offline.
 		if st, ok := byID[id]; ok {
 			out = append(out, st)
 		}

@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { ownsArrowKeys } from '../lib/keyboard'
 import { seek, toggleFavorite, togglePlay } from '../player/controller'
 import { nudge } from '../player/tuning'
 import { useLibrary } from '../stores/library'
@@ -23,6 +24,8 @@ export function useKeyboard() {
         return
       }
       if (isTyping(e) || e.metaKey || e.ctrlKey) return
+      // ↑/↓ scroll or move focus inside lists, menus, sliders and dialogs.
+      if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && ownsArrowKeys(e.target)) return
       if (ui.shortcutsOpen || ui.locationOpen || ui.appearanceOpen || ui.sheetOpen) return
       const lib = useLibrary.getState()
       // Fine tuning reveals the dial so the needle is visible.
@@ -43,7 +46,7 @@ export function useKeyboard() {
         '?': () => ui.setShortcutsOpen(true),
         t: () => ui.setDialOpen(!ui.dialOpen),
         l: () => {
-          // setTab clears the query, so only leave Favorites/Recent; a search on Stations stays.
+          // Favorites/Recent lists have no location context; a searched Stations list keeps its query.
           if (ui.tab !== 'all') ui.setTab('all')
           ui.setLocationOpen(true)
         },

@@ -7,7 +7,7 @@ import { seek, setSleep, toggleFavorite, togglePlay } from '../player/controller
 import { isEnglish } from '../capture/session'
 import { latestText, useCapture } from '../stores/capture'
 import { useLibrary } from '../stores/library'
-import { usePlayer } from '../stores/player'
+import { failureKey, usePlayer } from '../stores/player'
 import { useUI } from '../stores/ui'
 import { CaptureButtons } from './CaptureButtons'
 import { Dialog } from './Dialog'
@@ -18,12 +18,12 @@ import s from './ApplePlayer.module.css'
 
 export function ApplePlayer() {
   const t = useT()
-  const { station, status, title, sleepUntil } = usePlayer()
+  const { station, status, title, sleepUntil, errorCode } = usePlayer()
   const { volume, muted, setVolume, setMuted, favorites } = useLibrary()
   const { country, region, sheetOpen, setSheetOpen, dialOpen, setDialOpen } = useUI()
   const mobile = useIsMobile()
   const dial = useDial(country, region)
-  const active = status === 'playing' || status === 'connecting' || status === 'buffering'
+  const active = status === 'playing' || status === 'connecting' || status === 'buffering' || status === 'offline'
   const favorite = !!station && favorites.some((f) => f.id === station.id)
   const canSeek = !!dial.data?.slots.length
   // While captions run, the bar shows the latest line instead of the stream title.
@@ -81,6 +81,13 @@ export function ApplePlayer() {
   return (
     <>
       <section className={s.bar} aria-label={t('player.title')}>
+        {status === 'error' && (
+          <div className={s.barError} role="alert">
+            <span>{t(failureKey(errorCode))}</span>
+            <button onClick={() => togglePlay()}>{t('display.retry')}</button>
+            <button onClick={() => seek(1)}>{t('display.next')}</button>
+          </div>
+        )}
         <div className={s.barInner}>
           <button className={s.station} onClick={() => setSheetOpen(true)} aria-label={t('player.details')}>
             {station ? (
@@ -142,6 +149,15 @@ export function ApplePlayer() {
             {station ? ' · ' : ''}
             {description}
           </p>
+          {status === 'error' && (
+            <div className={s.sheetError}>
+              <p>{t(failureKey(errorCode))}</p>
+              <div className={s.sheetActions}>
+                <button onClick={() => togglePlay()}>{t('display.retry')}</button>
+                <button onClick={() => seek(1)}>{t('display.next')}</button>
+              </div>
+            </div>
+          )}
           {controls}
           <div className={s.sheetVolume}>{volumeControl}</div>
           <div className={s.settings}>
