@@ -4,9 +4,19 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-HotFM is a web radio player for discovering and listening to stations from the **United States and mainland China**. Find a familiar station, explore another city, or follow an English broadcast with live captions—all in your browser, without an account.
+HotFM is a **free** web radio player with **8,000+ live stations from the United States and mainland China**. Find a familiar station, explore another city, or follow an English broadcast with live captions. It all runs in your browser, with no account and no subscription.
 
 ![HotFM showing a favorite station, the bottom player, and the captions and recording panel](docs/images/hotfm-preview.png)
+
+## Why HotFM
+
+- 🆓 **Free.** No subscription, no premium tier, and no ads.
+- 🙅 **No sign-up.** Open the page and press play. Favorites and history stay in your browser.
+- 📻 **8,000+ stations.** About 6,000 US and 1,800 mainland China stations, searchable by name, city, genre, or frequency.
+- 💬 **Free live captions for English radio.** Speech recognition runs on your own device: **no API key, no per-minute fees, and no audio sent to the cloud**.
+- 🎙️ **Record and keep what you hear.** Save up to 3 hours of a broadcast with its transcript (`.txt` + time-aligned `.srt`), then replay it with synced captions.
+- 🎧 **Built for English listening practice.** Real conversations from US radio, a full-screen reading view, and click-to-seek replay.
+- 🏠 **Easy to self-host.** One executable or one `docker compose up`, backed by SQLite, with no external services to set up.
 
 ## Make radio part of your day
 
@@ -18,25 +28,23 @@ Keep music on while you work, catch up with voices from home, or practice listen
 - Choose a country and state or province directly from the search bar. Region lookup accepts Chinese, English, pinyin, and US state abbreviations.
 - Browse by popularity or frequency. Search covers the full catalog in your selected region, with support for partial names and minor English typos.
 - If nothing matches, expand your search across all supported regions. Recent searches make it easy to revisit a discovery.
-- Listings that describe the same broadcast are merged, so a station appears once even when the directory carries several streams for it.
-- On a fresh install, the list says when the catalog is syncing and fills in on its own, with no reload needed.
+- Duplicate listings for the same broadcast are merged, so each station appears once.
 
 ### Settle in and keep listening
 
 - Start a station with one click. The player stays at the bottom while you browse, search, or open your favorites.
-- Adjust volume, mute, switch stations, and see track or program information when the station provides it—including stations that stream straight to the browser.
+- Adjust volume, mute, switch stations, and see the current song or program when the station provides it.
 - Set a **15, 30, 60, or 90-minute sleep timer** for evening listening.
 - On a phone, tap the compact player to open its controls. On desktop, use keyboard shortcuts to control playback without reaching for the mouse.
-- HotFM checks station availability and attempts to reconnect interrupted streams. When the network drops it says so and picks up again by itself once you are back online.
-- When a station cannot play, the player says why—for example too many simultaneous streams from your network—and offers **Retry** and the next station in the same place in every appearance.
+- Interrupted streams reconnect automatically, and playback resumes on its own when your network comes back.
+- When a station cannot play, the player tells you why and offers **Retry** or the next station.
 
 ### Build your personal collection
 
 - Save stations to **Favorites** and return to your last **10 recently played stations**.
-- Switching between Favorites, Recent, and the station list keeps your search and place in the list, and playing a station from another country no longer moves the region you are browsing.
 - Removing a favorite, or clearing the recent list, can be undone right away.
-- Export your favorites to a JSON file and import them in another browser; imported stations that the catalog has since merged still resolve to the surviving entry.
-- Keep favorites, listening history, volume, and appearance preferences in the current browser—no sign-up needed. These settings do not sync between devices.
+- Export your favorites to a JSON file and import them in another browser.
+- Favorites, listening history, volume, and appearance preferences stay in the current browser, with no sign-up. They do not sync between devices.
 - Copy a station link from its menu to share it or open it again later.
 
 ### Follow English broadcasts with live captions
@@ -45,9 +53,10 @@ Open **CC** on desktop to read along in a side panel while the station plays. Ti
 
 - Text updates as speech is recognized, then settles into transcript lines.
 - Scroll back through the conversation and jump to the latest caption when ready.
+- Expand to a **full-screen reading view** that lays the transcript out as easy-to-read paragraphs.
 - Save the transcript as a `.txt` file for later reading or language practice.
-- Speech recognition runs on your device, with **no API key and no audio sent to a cloud transcription service**. First use downloads a speech model, which the browser caches for later sessions; the panel shows its size, the engine in use, and lets you cancel the download.
-- Turning captions or recording on for a playing station keeps the audio going: HotFM switches to a server-relayed stream in the background instead of restarting the station.
+- Recognition uses Whisper **on your device**, so there is no API key, no usage bill, and no audio sent to a cloud transcription service. The first use downloads a speech model, which the browser caches for later sessions.
+- Turning on captions or recording does not interrupt a playing station.
 
 Live captions currently support **English stations on desktop browsers**. Recognition speed and accuracy depend on your device and the broadcast audio.
 
@@ -57,9 +66,9 @@ Record the current station from the player or the captions panel, then download 
 
 - See recording duration and file size as you listen.
 - English stations are transcribed automatically during recording, even when live captions are switched off.
-- When a transcript is available, download a ZIP containing the audio, `transcript.txt`, and an audio-aligned `transcript.srt`. Otherwise, download the audio on its own.
+- Download a ZIP containing the audio, `transcript.txt`, and an audio-aligned `transcript.srt`, or just the audio when no transcript is available.
+- **Replay with captions:** open a downloaded ZIP (or drop an audio file with its `.srt`) in the full-screen view. The sentence being spoken is highlighted, clicking any sentence jumps there, and you can skip ±15 seconds or change the playback speed.
 - Recordings stop when you stop playback, switch stations, or reach the **3-hour limit**.
-- Turning live captions off during a recording no longer loses the words still waiting to be transcribed; if a very long recording exceeds the transcription backlog, the transcript notes how many passages were missed.
 
 Recording is available on supported desktop browsers. Audio is saved as WebM, Ogg, or M4A depending on browser support. Download recordings and transcripts before leaving the page; they are kept only for the current session.
 
