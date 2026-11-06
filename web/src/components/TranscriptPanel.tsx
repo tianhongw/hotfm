@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import type { Station } from '../api/types'
 import { clock, cueAt, dateTime, elapsed, type Cue, type Segment } from '../capture/export'
-import { closeReplay, cycleReplayRate, openReplay, seekReplay, skipReplay, toggleReplay } from '../capture/replay'
+import { closeReplay, cycleReplayRate, openReplay, seekReplay, skipReplay, toggleReplay, toggleReplayLoop } from '../capture/replay'
 import {
   canCapture,
   canRecord,
@@ -16,6 +16,7 @@ import {
 import { useNow } from '../hooks/useNow'
 import { useT } from '../i18n'
 import { useCapture } from '../stores/capture'
+import { useLibrary } from '../stores/library'
 import { usePlayer } from '../stores/player'
 import { useReplay } from '../stores/replay'
 import { READER_SIZE, useUI } from '../stores/ui'
@@ -29,7 +30,9 @@ import {
   IconPause,
   IconPlay,
   IconRecord,
+  IconRepeat,
   IconShrink,
+  IconSpeaker,
   IconTrash,
 } from './Icons'
 import { Logo } from './Logo'
@@ -712,6 +715,9 @@ function ReplayTransport() {
   const duration = useReplay((r) => r.duration)
   const playing = useReplay((r) => r.playing)
   const rate = useReplay((r) => r.rate)
+  const loop = useReplay((r) => r.loop)
+  const volume = useLibrary((l) => l.volume)
+  const muted = useLibrary((l) => l.muted)
   const at = Math.min(time, duration)
   return (
     <footer className={s.transport}>
@@ -743,6 +749,35 @@ function ReplayTransport() {
         style={{ ['--p' as string]: `${duration ? (at / duration) * 100 : 0}%` }}
       />
       <time className={s.time}>{elapsed(duration)}</time>
+      <button
+        className={s.loopBtn}
+        onClick={toggleReplayLoop}
+        aria-pressed={loop}
+        aria-label={t('capture.loop')}
+        title={t('capture.loop')}
+      >
+        <IconRepeat size={18} />
+      </button>
+      <div className={s.volume}>
+        <button
+          onClick={() => useLibrary.getState().setMuted(!muted)}
+          aria-pressed={muted}
+          aria-label={t('transport.mute')}
+          title={t('transport.mute')}
+        >
+          <IconSpeaker size={18} muted={muted || volume === 0} />
+        </button>
+        <input
+          className={s.seek}
+          type="range"
+          min={0}
+          max={100}
+          value={muted ? 0 : Math.round(volume * 100)}
+          onChange={(e) => useLibrary.getState().setVolume(+e.target.value / 100)}
+          aria-label={t('transport.volume')}
+          style={{ ['--p' as string]: `${muted ? 0 : volume * 100}%` }}
+        />
+      </div>
       <button className={s.speed} onClick={cycleReplayRate} aria-label={t('capture.speed')} title={t('capture.speed')}>
         {rate}×
       </button>

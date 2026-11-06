@@ -226,6 +226,7 @@ const zh = {
   'capture.fwd15': '前进 15 秒',
   'capture.seek': '播放进度',
   'capture.speed': '播放速度',
+  'capture.loop': '循环播放',
 }
 
 type Key = keyof typeof zh
@@ -457,6 +458,7 @@ const en: Record<Key, Msg> = {
   'capture.fwd15': 'Forward 15 seconds',
   'capture.seek': 'Playback position',
   'capture.speed': 'Playback speed',
+  'capture.loop': 'Loop',
 }
 
 export type TKey = Key

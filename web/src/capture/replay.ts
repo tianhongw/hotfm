@@ -101,6 +101,7 @@ export async function openReplay(files: File[]) {
   })
   el.src = url
   el.playbackRate = useReplay.getState().rate
+  el.loop = useReplay.getState().loop
   void el.play().catch(() => {})
 }
 
@@ -134,6 +135,13 @@ export function seekReplay(ms: number) {
 
 export function skipReplay(ms: number) {
   if (audio) seekReplay(audio.currentTime * 1000 + ms)
+}
+
+/** Restarts from the top at the end instead of stopping. */
+export function toggleReplayLoop() {
+  const loop = !useReplay.getState().loop
+  if (audio) audio.loop = loop
+  useReplay.getState().set({ loop })
 }
 
 /** Steps through REPLAY_RATES. */

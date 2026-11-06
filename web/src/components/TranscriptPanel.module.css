@@ -829,6 +829,52 @@
   outline-offset: 4px;
 }
 
+.loopBtn,
+.volume button {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: var(--text-2);
+}
+
+.loopBtn:hover,
+.volume button:hover {
+  color: var(--text);
+  background: var(--panel-2);
+}
+
+.loopBtn[aria-pressed='true'] {
+  color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 14%, transparent);
+}
+
+.volume {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+}
+
+.volume .seek {
+  flex: none;
+  width: 88px;
+}
+
+@media (max-width: 640px) {
+  .transport {
+    gap: 6px;
+    padding-inline: 12px;
+  }
+
+  /* Phones set the level with their own buttons; keep just the mute toggle. */
+  .volume .seek {
+    display: none;
+  }
+}
+
 .dropOverlay {
   position: absolute;
   inset: 12px;

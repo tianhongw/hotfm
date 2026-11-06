@@ -17,6 +17,8 @@ interface ReplayState {
   duration: number
   playing: boolean
   rate: number
+  /** Starts over from the top when the recording ends. */
+  loop: boolean
   set: (p: Partial<Omit<ReplayState, 'set'>>) => void
 }
 
@@ -26,5 +28,6 @@ export const useReplay = create<ReplayState>()((set) => ({
   duration: 0,
   playing: false,
   rate: 1,
+  loop: false,
   set: (p) => set(p),
 }))
